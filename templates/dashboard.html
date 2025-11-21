@@ -635,8 +635,15 @@
             moduleName.textContent = module;
 
             const status = document.createElement('span');
-            status.className = `${statusColor} text-sm font-semibold`;
+            status.className = `${statusColor} text-sm font-semibold cursor-help`;
             status.textContent = `${statusIcon} ${limitedCount}/${totalCount} limité(s)`;
+
+            // Add tooltip explaining rate limiting
+            if (limitedCount > 0) {
+              status.title = `⚠️ ${limitedCount} variable(s) en rate limit (5s minimum entre sauvegardes).\nLes messages trop fréquents sont ignorés pour protéger la base de données.`;
+            } else {
+              status.title = `✅ Aucune variable limitée actuellement.\nRate limit: 5s minimum entre sauvegardes DB par variable.`;
+            }
 
             innerDiv.appendChild(moduleName);
             innerDiv.appendChild(status);
