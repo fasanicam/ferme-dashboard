@@ -608,28 +608,41 @@
         .then(response => response.json())
         .then(data => {
           const container = document.getElementById('rate-limit-status');
+          container.innerHTML = ''; // Clear first
+
           if (Object.keys(data).length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">Aucune donnée disponible</p>';
+            const p = document.createElement('p');
+            p.className = 'text-gray-500 text-sm';
+            p.textContent = 'Aucune donnée disponible';
+            container.appendChild(p);
             return;
           }
 
-          let html = '';
           for (const [module, variables] of Object.entries(data)) {
             const limitedCount = variables.filter(v => v.is_limited).length;
             const totalCount = variables.length;
             const statusColor = limitedCount > 0 ? 'text-orange-600' : 'text-green-600';
             const statusIcon = limitedCount > 0 ? '⏳' : '✅';
 
-            html += `
-              < div class="border-b border-gray-100 pb-2 last:border-0" >
-                <div class="flex justify-between items-center">
-                  <span class="font-medium text-gray-700">${module}</span>
-                  <span class="${statusColor} text-sm font-semibold">${statusIcon} ${limitedCount}/${totalCount} limité(s)</span>
-                </div>
-              </div >
-              `;
+            const div = document.createElement('div');
+            div.className = 'border-b border-gray-100 pb-2 last:border-0';
+
+            const innerDiv = document.createElement('div');
+            innerDiv.className = 'flex justify-between items-center';
+
+            const moduleName = document.createElement('span');
+            moduleName.className = 'font-medium text-gray-700';
+            moduleName.textContent = module;
+
+            const status = document.createElement('span');
+            status.className = `${statusColor} text-sm font-semibold`;
+            status.textContent = `${statusIcon} ${limitedCount}/${totalCount} limité(s)`;
+
+            innerDiv.appendChild(moduleName);
+            innerDiv.appendChild(status);
+            div.appendChild(innerDiv);
+            container.appendChild(div);
           }
-          container.innerHTML = html;
         });
     }
 
