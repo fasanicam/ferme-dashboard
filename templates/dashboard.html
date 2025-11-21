@@ -92,12 +92,19 @@
     {% if dashboard %}
     {% for module, variables in dashboard.items() %}
     <div id="module-{{ module }}"
-      class="bg-white rounded-2xl shadow-lg p-6 fade-in hover:shadow-xl transition-shadow duration-300">
-      <h2 class="text-xl font-bold mb-4 capitalize text-gray-700 border-b pb-2">{{ module.replace("_", " ") }}</h2>
+      class="bg-white rounded-2xl shadow-lg p-6 fade-in hover:shadow-xl transition-shadow duration-300 group">
+      <div class="flex justify-between items-center mb-4 border-b pb-2">
+        <h2 class="text-xl font-bold capitalize text-gray-700">{{ module.replace("_", " ") }}</h2>
+        <button onclick="deleteModule('{{ module }}')"
+          class="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full p-2"
+          title="Supprimer ce module">
+          🗑️
+        </button>
+      </div>
       <div id="vars-{{ module }}" class="space-y-3 max-h-96 overflow-y-auto pr-2"
         style="scrollbar-width: thin; scrollbar-color: rgba(59, 130, 246, 0.3) transparent;">
         {% for variable, value in variables.items() %}
-        <div id="var-{{ module }}-{{ variable }}" class="border-b border-gray-100 pb-3 last:border-0">
+        <div id="var-{{ module }}-{{ variable }}" class="border-b border-gray-100 pb-3 last:border-0 group/var">
           <div class="flex justify-between items-start mb-2">
             <span class="text-gray-600 font-medium">{{ variable.replace("_", " ") }}</span>
             <div class="text-right">
@@ -107,6 +114,11 @@
                   class="text-gray-400 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-50"
                   title="Voir l'historique">
                   📊
+                </button>
+                <button onclick="deleteVariable('{{ module }}', '{{ variable }}')"
+                  class="opacity-0 group-hover/var:opacity-100 transition-opacity text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full p-1"
+                  title="Supprimer cette variable">
+                  ❌
                 </button>
               </div>
               <div class="timestamp text-xs text-gray-400" data-time="{{ value.derniere_maj }}">🕒 {{
@@ -128,11 +140,17 @@
   </div>
 
   <!-- Charts Section -->
-  <div class="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
+  <div class="mt-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
     <!-- Message Stats -->
     <div class="bg-white rounded-2xl shadow-lg p-6">
       <h2 class="text-xl font-bold mb-4 text-gray-800">📈 Messages par minute</h2>
       <canvas id="messageStatsChart"></canvas>
+    </div>
+
+    <!-- Publication Rate Monitoring -->
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">⚠️ Publications par module</h2>
+      <canvas id="publicationStatsChart"></canvas>
     </div>
 
     <!-- Recent Activity -->
@@ -184,6 +202,7 @@
   <script>
     const socket = io();
     let messageStatsChartInstance = null;
+    let publicationStatsChartInstance = null;
     let historyChartInstance = null;
 
     // --- Utils ---
@@ -214,6 +233,67 @@
       });
     }
     setInterval(updateTimestamps, 10000);
+
+    // --- Delete Functions ---
+    function deleteVariable(module, variable) {
+      const varDiv = document.getElementById(`var-${module}-${variable}`);
+      if (varDiv) {
+        // Fade out animation
+        varDiv.style.opacity = '0';
+        varDiv.style.transform = 'translateX(20px)';
+        varDiv.style.transition = 'all 0.3s ease-out';
+
+        setTimeout(() => {
+          varDiv.remove();
+
+          // Destroy sparkline chart if exists
+          const chartKey = `${module}-${variable}`;
+          if (sparklineCharts[chartKey]) {
+            sparklineCharts[chartKey].destroy();
+            delete sparklineCharts[chartKey];
+          }
+
+          // Check if module has no more variables
+          const varsContainer = document.getElementById(`vars-${module}`);
+          if (varsContainer && varsContainer.children.length === 0) {
+            deleteModule(module);
+          }
+        }, 300);
+      }
+    }
+
+    function deleteModule(module) {
+      const moduleDiv = document.getElementById(`module-${module}`);
+      if (moduleDiv) {
+        // Confirm deletion
+        if (!confirm(`Supprimer le module "${module}" et toutes ses variables ?`)) {
+          return;
+        }
+
+        // Fade out animation
+        moduleDiv.style.opacity = '0';
+        moduleDiv.style.transform = 'scale(0.95)';
+        moduleDiv.style.transition = 'all 0.3s ease-out';
+
+        setTimeout(() => {
+          moduleDiv.remove();
+
+          // Destroy all sparkline charts for this module
+          Object.keys(sparklineCharts).forEach(key => {
+            if (key.startsWith(`${module}-`)) {
+              sparklineCharts[key].destroy();
+              delete sparklineCharts[key];
+            }
+          });
+
+          // Check if dashboard is empty
+          const container = document.getElementById('dashboard-container');
+          if (container && container.children.length === 0) {
+            container.innerHTML = '<div id="no-data-msg" class="col-span-full text-center text-gray-500 py-12">Aucune donnée disponible. En attente de messages MQTT...</div>';
+          }
+        }, 300);
+      }
+    }
 
     // --- Sparkline Charts ---
     const sparklineCharts = {};
@@ -306,36 +386,29 @@
     function initMessageStatsChart() {
       const ctx = document.getElementById('messageStatsChart').getContext('2d');
 
-      // Create gradient for bars
+      // Create gradient matching sparklines
       const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-      gradient.addColorStop(0, 'rgba(75, 192, 192, 0.8)');
-      gradient.addColorStop(1, 'rgba(75, 192, 192, 0.2)');
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.01)');
 
       messageStatsChartInstance = new Chart(ctx, {
-        type: 'bar',
+        type: 'line',
         data: {
           labels: [],
           datasets: [
             {
-              label: 'Messages reçus',
+              label: 'Messages par minute',
               data: [],
               backgroundColor: gradient,
-              borderColor: 'rgba(75, 192, 192, 1)',
-              borderWidth: 2,
-              borderRadius: 4,
-              order: 2
-            },
-            {
-              label: 'Tendance',
-              data: [],
-              type: 'line',
-              borderColor: 'rgba(255, 99, 132, 1)',
-              backgroundColor: 'rgba(255, 99, 132, 0.1)',
+              borderColor: 'rgba(59, 130, 246, 0.9)',
               borderWidth: 2,
               tension: 0.4,
-              pointRadius: 0,
-              fill: true,
-              order: 1
+              pointRadius: 3,
+              pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
+              pointHoverRadius: 5,
+              fill: true
             }
           ]
         },
@@ -350,7 +423,28 @@
             intersect: false,
           },
           scales: {
-            y: { beginAtZero: true }
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)'
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: true,
+              labels: {
+                color: 'rgb(75, 85, 99)',
+                font: {
+                  size: 12
+                }
+              }
+            }
           }
         }
       });
@@ -367,15 +461,94 @@
 
             messageStatsChartInstance.data.labels = labels;
             messageStatsChartInstance.data.datasets[0].data = values;
-            messageStatsChartInstance.data.datasets[1].data = values; // Simple trend line using same data but smoothed
 
             messageStatsChartInstance.update();
           }
         });
     }
 
+    // --- Publication Stats Chart ---
+    function initPublicationStatsChart() {
+      const ctx = document.getElementById('publicationStatsChart').getContext('2d');
+
+      // Create gradient
+      const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+      gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
+      gradient.addColorStop(1, 'rgba(239, 68, 68, 0.01)');
+
+      publicationStatsChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Nombre de publications',
+            data: [],
+            backgroundColor: gradient,
+            borderColor: 'rgba(239, 68, 68, 0.9)',
+            borderWidth: 2,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          animation: {
+            duration: 750,
+            easing: 'easeInOutQuart'
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)'
+              },
+              title: {
+                display: true,
+                text: 'Nombre de messages',
+                color: 'rgb(75, 85, 99)'
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  return `${context.parsed.y} publications`;
+                }
+              }
+            }
+          }
+        }
+      });
+      updatePublicationStats();
+    }
+
+    function updatePublicationStats() {
+      fetch('/api/stats/publications')
+        .then(response => response.json())
+        .then(data => {
+          if (publicationStatsChartInstance) {
+            const labels = data.map(d => d.module);
+            const values = data.map(d => d.count);
+
+            publicationStatsChartInstance.data.labels = labels;
+            publicationStatsChartInstance.data.datasets[0].data = values;
+
+            publicationStatsChartInstance.update();
+          }
+        });
+    }
+
     // Refresh stats every minute
     setInterval(updateMessageStats, 60000);
+    setInterval(updatePublicationStats, 60000);
 
     // --- Modal & History Chart ---
     function openChart(module, variable) {
@@ -530,8 +703,10 @@
 
     // Init
     initMessageStatsChart();
+    initPublicationStatsChart();
     initAllSparklines();
   </script>
 </body>
 
 </html>
+```

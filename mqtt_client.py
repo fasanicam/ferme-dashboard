@@ -1,10 +1,19 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import paho.mqtt.client as mqtt  # type: ignore
-from collections import deque
+from collections import deque, defaultdict
+import time
 
 dashboard_data = {}
 last_messages = deque(maxlen=10)  # Stocke les 10 derniers messages
+
+# Rate limiting: track last message time per module/variable
+last_save_time = defaultdict(lambda: datetime.min)
+last_value_cache = {}  # Cache to detect duplicate values
+RATE_LIMIT_SECONDS = 5  # Minimum 5 seconds between database saves for same variable
+
+# Publication rate monitoring: track message count per module
+module_message_count = defaultdict(int)
 
 from logging.handlers import RotatingFileHandler
 import database
@@ -65,6 +74,9 @@ def on_message(client, userdata, msg):
 
         module, variable = parts[3], parts[4]
         
+        # Track publication count per module
+        module_message_count[module] += 1
+        
         # Si le payload est vide, supprimer la variable
         if not payload:
             if module in dashboard_data and variable in dashboard_data[module]:
@@ -82,16 +94,32 @@ def on_message(client, userdata, msg):
         if module not in dashboard_data:
             dashboard_data[module] = {}
 
-        data_entry = {
+        dashboard_data[module][variable] = {
             "valeur": payload,
             "derniere_maj": timestamp
         }
-        dashboard_data[module][variable] = data_entry
         
-        # Save to database
-        database.save_measurement(module, variable, payload)
+        # Rate limiting for database saves
+        key = f"{module}:{variable}"
+        now = datetime.now()
+        time_since_last_save = (now - last_save_time[key]).total_seconds()
         
-        # Emit update event
+        # Check if value has changed (skip duplicates)
+        value_changed = last_value_cache.get(key) != payload
+        
+        # Save to database only if:
+        # 1. Enough time has passed (rate limit) OR
+        # 2. Value has changed significantly
+        should_save = time_since_last_save >= RATE_LIMIT_SECONDS or value_changed
+        
+        if should_save:
+            database.save_measurement(module, variable, payload)
+            last_save_time[key] = now
+            last_value_cache[key] = payload
+        else:
+            logging.debug(f"Skipped DB save for {key} (rate limited or duplicate)")
+        
+        # Emit update event (always update UI, even if not saving to DB)
         if hasattr(client, 'socketio'):
             client.socketio.emit('update_data', {
                 'module': module, 

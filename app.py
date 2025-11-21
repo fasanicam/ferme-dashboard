@@ -60,6 +60,14 @@ def get_message_stats():
     data = database.get_message_stats()
     return jsonify(data)
 
+@app.route("/api/stats/publications")
+def get_publication_stats():
+    """Get publication count per module for monitoring"""
+    from mqtt_client import module_message_count
+    data = [{"module": module, "count": count} for module, count in module_message_count.items()]
+    # Sort by count descending to show most active modules first
+    data.sort(key=lambda x: x['count'], reverse=True)
+    return jsonify(data)
+
 if __name__ == "__main__":
     socketio.run(app, debug=True, host="0.0.0.0")
- 
