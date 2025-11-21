@@ -147,9 +147,9 @@ def init_mqtt(socketio=None):
     client.on_message = on_message
     # client.username_pw_set('admin', 'admin@icam')
     try:
-        client.connect("global_mqtt", 1883, 60)
-        # client.connect("broker.emqx.io", 1883, 60)
+        client.connect("mqtt.dev.icam.school", 1883, 60)
         client.loop_start()
+        logging.info("🚀 Client MQTT démarré et connecté à mqtt.dev.icam.school")
     except Exception as e:
-        logging.error("Impossible de se connecter au broker MQTT : %s", e)
+        logging.error("❌ Erreur lors de la connexion au broker MQTT : %s", e)
     return client
