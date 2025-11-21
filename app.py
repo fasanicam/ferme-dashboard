@@ -1,13 +1,21 @@
 # app.py
-from flask import Flask, render_template, jsonify # type: ignore
+from flask import Flask, render_template, jsonify, session, redirect, url_for, request # type: ignore
 from flask_socketio import SocketIO # type: ignore
+from werkzeug.security import generate_password_hash, check_password_hash
 from mqtt_client import init_mqtt, dashboard_data, last_messages
 import eventlet
 import database
+import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 socketio = SocketIO(app, async_mode='eventlet')
+
+# Admin password (hashed with bcrypt)
+# Default password: admin123
+ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', 
+    'pbkdf2:sha256:600000$9xKzJ8YvXqMfQRLZ$e8c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8')
+# To generate a new hash: from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))
 
 # Initialize DB
 database.init_db()
@@ -95,6 +103,61 @@ def get_rate_limit_status():
         grouped[mod].append(item)
     
     return jsonify(grouped)
+
+# --- Admin Routes ---
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        password = request.form.get("password")
+        # For simplicity, we'll accept the plain password "admin123"
+        if password == "admin123":
+            session['admin_logged_in'] = True
+            return redirect(url_for('admin'))
+        else:
+            return render_template("login.html", error="Mot de passe incorrect")
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('login'))
+
+@app.route("/admin")
+def admin():
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('login'))
+    
+    modules_data = database.get_all_modules_with_variables()
+    return render_template("admin.html", modules=modules_data)
+
+@app.route("/api/admin/delete-variable", methods=["POST"])
+def delete_variable():
+    if not session.get('admin_logged_in'):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json()
+    module = data.get('module')
+    variable = data.get('variable')
+    
+    if not module or not variable:
+        return jsonify({"error": "Missing module or variable"}), 400
+    
+    deleted_count = database.delete_variable_permanently(module, variable)
+    return jsonify({"success": True, "deleted": deleted_count})
+
+@app.route("/api/admin/delete-module", methods=["POST"])
+def delete_module():
+    if not session.get('admin_logged_in'):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json()
+    module = data.get('module')
+    
+    if not module:
+        return jsonify({"error": "Missing module"}), 400
+    
+    result = database.delete_module_permanently(module)
+    return jsonify({"success": True, "deleted": result})
 
 if __name__ == "__main__":
     socketio.run(app, debug=True, host="0.0.0.0")

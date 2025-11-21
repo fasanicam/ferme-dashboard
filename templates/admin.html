@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Ferme Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gradient-to-br from-green-50 to-blue-50 min-h-screen p-8">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                🛠️ Administration
+            </h1>
+            <div class="flex gap-4">
+                <a href="/" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    📊 Dashboard
+                </a>
+                <a href="/logout" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                    🚪 Déconnexion
+                </a>
+            </div>
+        </div>
+
+        <!-- Warning Banner -->
+        <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-8 rounded-lg">
+            <div class="flex items-center">
+                <span class="text-2xl mr-3">⚠️</span>
+                <div>
+                    <p class="font-bold text-red-800">Attention : Suppression permanente</p>
+                    <p class="text-red-700 text-sm">Les suppressions effectuées ici sont <strong>définitives</strong> et
+                        suppriment toutes les données de la base de données. Il n'y a pas d'annulation possible.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modules List -->
+        {% if modules %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for module, variables in modules.items() %}
+            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow" id="module-{{ module }}">
+                <div class="flex justify-between items-start mb-4">
+                    <h2 class="text-xl font-bold text-gray-800 capitalize">{{ module.replace('_', ' ') }}</h2>
+                    <button onclick="deleteModule('{{ module }}')"
+                        class="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                        title="Supprimer le module entier">
+                        🗑️ Module
+                    </button>
+                </div>
+
+                <div class="space-y-2">
+                    <p class="text-sm text-gray-600 font-semibold mb-2">Variables ({{ variables|length }}) :</p>
+                    {% for variable in variables %}
+                    <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                        id="var-{{ module }}-{{ variable }}">
+                        <span class="text-gray-700">{{ variable }}</span>
+                        <button onclick="deleteVariable('{{ module }}', '{{ variable }}')"
+                            class="px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors"
+                            title="Supprimer cette variable">
+                            ❌
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-white rounded-2xl shadow-lg p-12 text-center">
+            <p class="text-gray-500 text-lg">Aucun module trouvé dans la base de données.</p>
+            <p class="text-gray-400 text-sm mt-2">Les modules apparaîtront ici dès qu'ils publieront des données.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function deleteVariable(module, variable) {
+            if (!confirm(`⚠️ Supprimer définitivement la variable "${variable}" du module "${module}" ?\n\nToutes les mesures associées seront supprimées de la base de données.`)) {
+                return;
+            }
+
+            fetch('/api/admin/delete-variable', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ module, variable })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove the variable element with fade-out
+                        const varElement = document.getElementById(`var-${module}-${variable}`);
+                        if (varElement) {
+                            varElement.style.transition = 'opacity 0.3s';
+                            varElement.style.opacity = '0';
+                            setTimeout(() => {
+                                varElement.remove();
+
+                                // Check if module has no more variables
+                                const moduleCard = document.getElementById(`module-${module}`);
+                                const remainingVars = moduleCard.querySelectorAll('[id^="var-"]');
+                                if (remainingVars.length === 0) {
+                                    moduleCard.style.transition = 'opacity 0.3s';
+                                    moduleCard.style.opacity = '0';
+                                    setTimeout(() => moduleCard.remove(), 300);
+                                }
+                            }, 300);
+                        }
+
+                        alert(`✅ Variable "${variable}" supprimée (${data.deleted} mesures supprimées)`);
+                    } else {
+                        alert('❌ Erreur lors de la suppression');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('❌ Erreur réseau');
+                });
+        }
+
+        function deleteModule(module) {
+            if (!confirm(`⚠️ ATTENTION : Supprimer définitivement le module "${module}" ?\n\nToutes les variables et mesures associées seront supprimées de la base de données.\n\nCette action est IRRÉVERSIBLE.`)) {
+                return;
+            }
+
+            fetch('/api/admin/delete-module', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ module })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove the module card with fade-out
+                        const moduleCard = document.getElementById(`module-${module}`);
+                        if (moduleCard) {
+                            moduleCard.style.transition = 'opacity 0.3s';
+                            moduleCard.style.opacity = '0';
+                            setTimeout(() => moduleCard.remove(), 300);
+                        }
+
+                        alert(`✅ Module "${module}" supprimé\n${data.deleted.measurements} mesures supprimées\n${data.deleted.publications} publications supprimées`);
+                    } else {
+                        alert('❌ Erreur lors de la suppression');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('❌ Erreur réseau');
+                });
+        }
+    </script>
+</body>
+
+</html>

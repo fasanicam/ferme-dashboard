@@ -87,3 +87,52 @@ def get_module_publication_trends(hours=24):
     conn.close()
     return data
 
+def get_all_modules_with_variables():
+    """Get all modules with their variables for admin interface."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''SELECT DISTINCT module, variable 
+                 FROM measurements 
+                 ORDER BY module, variable''')
+    data = c.fetchall()
+    conn.close()
+    
+    # Group by module
+    modules = {}
+    for module, variable in data:
+        if module not in modules:
+            modules[module] = []
+        modules[module].append(variable)
+    
+    return modules
+
+def delete_variable_permanently(module, variable):
+    """Permanently delete a variable and all its measurements."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("DELETE FROM measurements WHERE module=? AND variable=?", (module, variable))
+    deleted_count = c.rowcount
+    conn.commit()
+    conn.close()
+    return deleted_count
+
+def delete_module_permanently(module):
+    """Permanently delete a module and all its variables/measurements."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    
+    # Delete from measurements
+    c.execute("DELETE FROM measurements WHERE module=?", (module,))
+    measurements_deleted = c.rowcount
+    
+    # Delete from module_publications
+    c.execute("DELETE FROM module_publications WHERE module=?", (module,))
+    publications_deleted = c.rowcount
+    
+    conn.commit()
+    conn.close()
+    
+    return {
+        'measurements': measurements_deleted,
+        'publications': publications_deleted
+    }
