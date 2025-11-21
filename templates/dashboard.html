@@ -158,7 +158,14 @@
   <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
     <!-- Rate Limit Status -->
     <div class="bg-white rounded-2xl shadow-lg p-6">
-      <h2 class="text-xl font-bold mb-4 text-gray-800">⏱️ Statut Rate Limit</h2>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-gray-800">⏱️ Statut Rate Limit</h2>
+        <button onclick="showRateLimitInfo()"
+          class="text-blue-600 hover:text-blue-800 text-2xl cursor-pointer transition-transform hover:scale-110"
+          title="Qu'est-ce que le rate limit ?">
+          ℹ️
+        </button>
+      </div>
       <div id="rate-limit-status" class="space-y-2 max-h-80 overflow-y-auto pr-2">
         <p class="text-gray-500 text-sm">Chargement...</p>
       </div>
@@ -178,6 +185,63 @@
           </div>
         </div>
         {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Rate Limit Info Modal -->
+  <div id="rateLimitInfoModal"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div
+      class="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl mx-4 transform transition-transform duration-300 scale-95">
+      <div class="flex justify-between items-start mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">⏱️ Qu'est-ce que le Rate Limit ?</h2>
+        <button onclick="hideRateLimitInfo()"
+          class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button>
+      </div>
+
+      <div class="space-y-4 text-gray-700">
+        <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+          <p class="font-semibold text-blue-900 mb-2">📚 Définition simple :</p>
+          <p>Le <strong>rate limit</strong> est une protection qui limite la fréquence de sauvegarde des données dans la
+            base de données.</p>
+        </div>
+
+        <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded">
+          <p class="font-semibold text-green-900 mb-2">✅ Règle actuelle :</p>
+          <p class="text-lg"><strong>Maximum 1 sauvegarde toutes les 5 secondes</strong> par variable</p>
+        </div>
+
+        <div class="bg-orange-50 border-l-4 border-orange-500 p-4 rounded">
+          <p class="font-semibold text-orange-900 mb-2">⚠️ Que se passe-t-il si je publie trop vite ?</p>
+          <ul class="list-disc list-inside space-y-1 mt-2">
+            <li>Le dashboard affiche toujours la nouvelle valeur en temps réel</li>
+            <li>Mais la base de données <strong>n'enregistre PAS</strong> si moins de 5 secondes se sont écoulées</li>
+            <li>Les messages trop fréquents sont <strong>ignorés</strong> pour protéger le système</li>
+          </ul>
+        </div>
+
+        <div class="bg-purple-50 border-l-4 border-purple-500 p-4 rounded">
+          <p class="font-semibold text-purple-900 mb-2">📊 Exemple concret :</p>
+          <div class="mt-2 font-mono text-sm bg-white p-3 rounded border">
+            <div class="text-green-600">✓ 12:00:00 → température = 20°C (sauvegardé)</div>
+            <div class="text-red-600">✗ 12:00:02 → température = 21°C (ignoré, trop tôt)</div>
+            <div class="text-red-600">✗ 12:00:04 → température = 22°C (ignoré, trop tôt)</div>
+            <div class="text-green-600">✓ 12:00:05 → température = 23°C (sauvegardé)</div>
+          </div>
+        </div>
+
+        <div class="bg-gray-50 p-4 rounded">
+          <p class="font-semibold text-gray-900 mb-2">💡 Pourquoi cette limite ?</p>
+          <p>Pour éviter de surcharger la base de données et garantir de bonnes performances pour tous les projets.</p>
+        </div>
+      </div>
+
+      <div class="mt-6 text-center">
+        <button onclick="hideRateLimitInfo()"
+          class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold">
+          J'ai compris !
+        </button>
       </div>
     </div>
   </div>
@@ -223,526 +287,540 @@
       if (interval > 1) return Math.floor(interval) + " ans";
       interval = seconds / 2592000;
       if (interval > 1) return Math.floor(interval) + " mois";
-      interval = seconds / 604800;
-      if (interval > 1) return Math.floor(interval) + " semaines";
-      interval = seconds / 86400;
-      if (interval > 1) return Math.floor(interval) + " jours";
-      interval = seconds / 3600;
-      if (interval > 1) return Math.floor(interval) + " heures";
-      interval = seconds / 60;
-      if (interval > 1) return Math.floor(interval) + " minutes";
-      if (seconds < 10) return "quelques secondes";
-      return Math.floor(seconds) + " secondes";
-    }
-
-    function updateTimestamps() {
-      document.querySelectorAll('.timestamp').forEach(el => {
-        const isoTime = el.getAttribute('data-time');
-        if (isoTime) {
-          el.innerHTML = '🕒 il y a ' + timeSince(new Date(isoTime));
-        }
-      });
-    }
-    setInterval(updateTimestamps, 10000);
-
-    // --- Delete Functions ---
-    function deleteVariable(module, variable) {
-      const varDiv = document.getElementById(`var-${module}-${variable}`);
-      if (varDiv) {
-        // Fade out animation
-        varDiv.style.opacity = '0';
-        varDiv.style.transform = 'translateX(20px)';
-        varDiv.style.transition = 'all 0.3s ease-out';
-
-        setTimeout(() => {
-          varDiv.remove();
-
-          // Destroy sparkline chart if exists
-          const chartKey = `${module}-${variable}`;
-          if (sparklineCharts[chartKey]) {
-            sparklineCharts[chartKey].destroy();
-            delete sparklineCharts[chartKey];
-          }
-
-          // Check if module has no more variables
-          const varsContainer = document.getElementById(`vars-${module}`);
-          if (varsContainer && varsContainer.children.length === 0) {
-            deleteModule(module);
-          }
-        }, 300);
+      function timeSince(timestamp) {
+        const now = new Date();
+        const past = new Date(timestamp);
+        const seconds = Math.floor((now - past) / 1000);
+        if (seconds < 60) return `il y a ${seconds}s`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `il y a ${minutes}min`;
+        const hours = Math.floor(minutes / 60);
+        return `il y a ${hours}h`;
       }
-    }
 
-    function deleteModule(module) {
-      const moduleDiv = document.getElementById(`module-${module}`);
-      if (moduleDiv) {
-        // Confirm deletion
-        if (!confirm(`Supprimer le module "${module}" et toutes ses variables ?`)) {
-          return;
+      // Rate Limit Info Modal
+      function showRateLimitInfo() {
+        const modal = document.getElementById('rateLimitInfoModal');
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        modal.querySelector('.bg-white').classList.remove('scale-95');
+        modal.querySelector('.bg-white').classList.add('scale-100');
+      }
+
+      function hideRateLimitInfo() {
+        const modal = document.getElementById('rateLimitInfoModal');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        modal.querySelector('.bg-white').classList.remove('scale-100');
+        modal.querySelector('.bg-white').classList.add('scale-95');
+      }
+
+      function updateTimestamps() {
+        document.querySelectorAll('.timestamp').forEach(el => {
+          const isoTime = el.getAttribute('data-time');
+          if (isoTime) {
+            el.innerHTML = '🕒 il y a ' + timeSince(new Date(isoTime));
+          }
+        });
+      }
+      setInterval(updateTimestamps, 10000);
+
+      // --- Delete Functions ---
+      function deleteVariable(module, variable) {
+        const varDiv = document.getElementById(`var-${module}-${variable}`);
+        if (varDiv) {
+          // Fade out animation
+          varDiv.style.opacity = '0';
+          varDiv.style.transform = 'translateX(20px)';
+          varDiv.style.transition = 'all 0.3s ease-out';
+
+          setTimeout(() => {
+            varDiv.remove();
+
+            // Destroy sparkline chart if exists
+            const chartKey = `${module}-${variable}`;
+            if (sparklineCharts[chartKey]) {
+              sparklineCharts[chartKey].destroy();
+              delete sparklineCharts[chartKey];
+            }
+
+            // Check if module has no more variables
+            const varsContainer = document.getElementById(`vars-${module}`);
+            if (varsContainer && varsContainer.children.length === 0) {
+              deleteModule(module);
+            }
+          }, 300);
         }
+      }
 
-        // Fade out animation
-        moduleDiv.style.opacity = '0';
-        moduleDiv.style.transform = 'scale(0.95)';
-        moduleDiv.style.transition = 'all 0.3s ease-out';
+      function deleteModule(module) {
+        const moduleDiv = document.getElementById(`module-${module}`);
+        if (moduleDiv) {
+          // Confirm deletion
+          if (!confirm(`Supprimer le module "${module}" et toutes ses variables ?`)) {
+            return;
+          }
 
-        setTimeout(() => {
-          moduleDiv.remove();
+          // Fade out animation
+          moduleDiv.style.opacity = '0';
+          moduleDiv.style.transform = 'scale(0.95)';
+          moduleDiv.style.transition = 'all 0.3s ease-out';
 
-          // Destroy all sparkline charts for this module
-          Object.keys(sparklineCharts).forEach(key => {
-            if (key.startsWith(`${module}-`)) {
-              sparklineCharts[key].destroy();
-              delete sparklineCharts[key];
+          setTimeout(() => {
+            moduleDiv.remove();
+
+            // Destroy all sparkline charts for this module
+            Object.keys(sparklineCharts).forEach(key => {
+              if (key.startsWith(`${module}-`)) {
+                sparklineCharts[key].destroy();
+                delete sparklineCharts[key];
+              }
+            });
+
+            // Check if dashboard is empty
+            const container = document.getElementById('dashboard-container');
+            if (container && container.children.length === 0) {
+              container.innerHTML = '<div id="no-data-msg" class="col-span-full text-center text-gray-500 py-12">Aucune donnée disponible. En attente de messages MQTT...</div>';
+            }
+          }, 300);
+        }
+      }
+
+      // --- Sparkline Charts ---
+      const sparklineCharts = {};
+
+      function createSparkline(module, variable) {
+        const canvasId = `sparkline-${module}-${variable}`;
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        const chartKey = `${module}-${variable}`;
+
+        // Create gradient for sparkline
+        const gradient = ctx.createLinearGradient(0, 0, 0, 48);
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.01)');
+
+        // Create mini chart
+        sparklineCharts[chartKey] = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [{
+              data: [],
+              borderColor: 'rgba(59, 130, 246, 0.9)',
+              backgroundColor: gradient,
+              borderWidth: 2,
+              tension: 0.4,
+              pointRadius: 0,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+              duration: 750,
+              easing: 'easeInOutQuart'
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: { enabled: false }
+            },
+            scales: {
+              x: { display: false },
+              y: { display: false }
+            },
+            interaction: { mode: null }
+          }
+        });
+
+        // Load data for sparkline (last 20 points)
+        updateSparkline(module, variable);
+      }
+
+      function updateSparkline(module, variable) {
+        const chartKey = `${module}-${variable}`;
+        fetch(`/api/history/${module}/${variable}`)
+          .then(response => response.json())
+          .then(data => {
+            if (sparklineCharts[chartKey] && data.length > 0) {
+              // Take last 20 points for sparkline
+              const recentData = data.slice(-20);
+              const values = recentData.map(d => {
+                const val = parseFloat(d[0]);
+                return isNaN(val) ? null : val;
+              });
+
+              sparklineCharts[chartKey].data.labels = recentData.map(() => '');
+              sparklineCharts[chartKey].data.datasets[0].data = values;
+              sparklineCharts[chartKey].update(); // Smooth animation on update
+            }
+          })
+          .catch(err => console.log('Sparkline update skipped:', err));
+      }
+
+      function initAllSparklines() {
+        // Find all sparkline canvases and create charts
+        document.querySelectorAll('[id^="sparkline-"]').forEach(canvas => {
+          const parts = canvas.id.replace('sparkline-', '').split('-');
+          if (parts.length >= 2) {
+            const variable = parts.pop();
+            const module = parts.join('-');
+            createSparkline(module, variable);
+          }
+        });
+      }
+
+      // --- Charts ---
+      function initMessageStatsChart() {
+        const ctx = document.getElementById('messageStatsChart').getContext('2d');
+
+        // Create gradient matching sparklines
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.01)');
+
+        messageStatsChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label: 'Messages par minute',
+                data: [],
+                backgroundColor: gradient,
+                borderColor: 'rgba(59, 130, 246, 0.9)',
+                borderWidth: 2,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointHoverRadius: 5,
+                fill: true
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            animation: {
+              duration: 750,
+              easing: 'easeInOutQuart'
+            },
+            interaction: {
+              mode: 'index',
+              intersect: false,
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.05)'
+                }
+              },
+              x: {
+                grid: {
+                  display: false
+                }
+              }
+            },
+            plugins: {
+              legend: {
+                display: true,
+                labels: {
+                  color: 'rgb(75, 85, 99)',
+                  font: {
+                    size: 12
+                  }
+                }
+              }
+            }
+          }
+        });
+        updateMessageStats();
+      }
+
+      function updateMessageStats() {
+        fetch('/api/stats/messages')
+          .then(response => response.json())
+          .then(data => {
+            if (messageStatsChartInstance) {
+              const labels = data.map(d => d[0].split(' ')[1]);
+              const values = data.map(d => d[1]);
+
+              messageStatsChartInstance.data.labels = labels;
+              messageStatsChartInstance.data.datasets[0].data = values;
+
+              messageStatsChartInstance.update();
             }
           });
-
-          // Check if dashboard is empty
-          const container = document.getElementById('dashboard-container');
-          if (container && container.children.length === 0) {
-            container.innerHTML = '<div id="no-data-msg" class="col-span-full text-center text-gray-500 py-12">Aucune donnée disponible. En attente de messages MQTT...</div>';
-          }
-        }, 300);
       }
-    }
 
-    // --- Sparkline Charts ---
-    const sparklineCharts = {};
+      // --- Publication Stats Chart (Trend Lines) ---
+      const moduleColors = [
+        { border: 'rgba(59, 130, 246, 0.9)', bg: 'rgba(59, 130, 246, 0.1)' },  // Blue
+        { border: 'rgba(239, 68, 68, 0.9)', bg: 'rgba(239, 68, 68, 0.1)' },    // Red
+        { border: 'rgba(34, 197, 94, 0.9)', bg: 'rgba(34, 197, 94, 0.1)' },    // Green
+        { border: 'rgba(251, 146, 60, 0.9)', bg: 'rgba(251, 146, 60, 0.1)' },  // Orange
+        { border: 'rgba(168, 85, 247, 0.9)', bg: 'rgba(168, 85, 247, 0.1)' },  // Purple
+        { border: 'rgba(236, 72, 153, 0.9)', bg: 'rgba(236, 72, 153, 0.1)' },  // Pink
+      ];
 
-    function createSparkline(module, variable) {
-      const canvasId = `sparkline-${module}-${variable}`;
-      const canvas = document.getElementById(canvasId);
-      if (!canvas) return;
+      function initPublicationStatsChart() {
+        const ctx = document.getElementById('publicationStatsChart').getContext('2d');
 
-      const ctx = canvas.getContext('2d');
-      const chartKey = `${module}-${variable}`;
-
-      // Create gradient for sparkline
-      const gradient = ctx.createLinearGradient(0, 0, 0, 48);
-      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
-      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.01)');
-
-      // Create mini chart
-      sparklineCharts[chartKey] = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [{
-            data: [],
-            borderColor: 'rgba(59, 130, 246, 0.9)',
-            backgroundColor: gradient,
-            borderWidth: 2,
-            tension: 0.4,
-            pointRadius: 0,
-            fill: true
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: {
-            duration: 750,
-            easing: 'easeInOutQuart'
+        publicationStatsChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: []
           },
-          plugins: {
-            legend: { display: false },
-            tooltip: { enabled: false }
-          },
-          scales: {
-            x: { display: false },
-            y: { display: false }
-          },
-          interaction: { mode: null }
-        }
-      });
+          options: {
+            responsive: true,
+            animation: {
+              duration: 750,
+              easing: 'easeInOutQuart'
+            },
+            interaction: {
+              mode: 'index',
+              intersect: false,
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.05)'
+                },
+                title: {
+                  display: true,
+                  text: 'Messages / heure',
+                  color: 'rgb(75, 85, 99)'
+                }
+              },
+              x: {
+                grid: {
+                  display: false
+                }
+              }
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                  color: 'rgb(75, 85, 99)',
+                  font: {
+                    size: 11
+                  },
+                  usePointStyle: true
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    return `${context.dataset.label}: ${context.parsed.y} msg / h`;
+                  }
+                }
+              }
+            }
+          }
+        });
+        updatePublicationStats();
+      }
 
-      // Load data for sparkline (last 20 points)
-      updateSparkline(module, variable);
-    }
+      function updatePublicationStats() {
+        fetch('/api/stats/publications')
+          .then(response => response.json())
+          .then(data => {
+            if (publicationStatsChartInstance && data.length > 0) {
+              // data format: [[module, hour, count], ...]
+              // Group by module and hour
+              const moduleData = {};
+              const allHours = new Set();
 
-    function updateSparkline(module, variable) {
-      const chartKey = `${module}-${variable}`;
-      fetch(`/api/history/${module}/${variable}`)
-        .then(response => response.json())
-        .then(data => {
-          if (sparklineCharts[chartKey] && data.length > 0) {
-            // Take last 20 points for sparkline
-            const recentData = data.slice(-20);
-            const values = recentData.map(d => {
+              data.forEach(([module, hour, count]) => {
+                if (!moduleData[module]) {
+                  moduleData[module] = {};
+                }
+                moduleData[module][hour] = count;
+                allHours.add(hour);
+              });
+
+              // Sort hours
+              const sortedHours = Array.from(allHours).sort();
+
+              // Create datasets for each module
+              const datasets = Object.keys(moduleData).map((module, index) => {
+                const colorIndex = index % moduleColors.length;
+                const values = sortedHours.map(hour => moduleData[module][hour] || 0);
+
+                return {
+                  label: module,
+                  data: values,
+                  borderColor: moduleColors[colorIndex].border,
+                  backgroundColor: moduleColors[colorIndex].bg,
+                  borderWidth: 2,
+                  tension: 0.4,
+                  pointRadius: 3,
+                  pointBackgroundColor: moduleColors[colorIndex].border,
+                  pointBorderColor: '#fff',
+                  pointBorderWidth: 1,
+                  pointHoverRadius: 5,
+                  fill: false
+                };
+              });
+
+              // Format hour labels (show only HH:00)
+              const labels = sortedHours.map(h => h.split(' ')[1] || h.split('T')[1] || h);
+
+              publicationStatsChartInstance.data.labels = labels;
+              publicationStatsChartInstance.data.datasets = datasets;
+              publicationStatsChartInstance.update();
+            }
+          });
+      }
+
+      // --- Rate Limit Status ---
+      function updateRateLimitStatus() {
+        fetch('/api/stats/rate-limit')
+          .then(response => response.json())
+          .then(data => {
+            const container = document.getElementById('rate-limit-status');
+            container.innerHTML = ''; // Clear first
+
+            if (Object.keys(data).length === 0) {
+              const p = document.createElement('p');
+              p.className = 'text-gray-500 text-sm';
+              p.textContent = 'Aucune donnée disponible';
+              container.appendChild(p);
+              return;
+            }
+
+            for (const [module, variables] of Object.entries(data)) {
+              const limitedCount = variables.filter(v => v.is_limited).length;
+              const totalCount = variables.length;
+              const statusColor = limitedCount > 0 ? 'text-orange-600' : 'text-green-600';
+              const statusIcon = limitedCount > 0 ? '⏳' : '✅';
+
+              const div = document.createElement('div');
+              div.className = 'border-b border-gray-100 pb-2 last:border-0';
+
+              const innerDiv = document.createElement('div');
+              innerDiv.className = 'flex justify-between items-center';
+
+              const moduleName = document.createElement('span');
+              moduleName.className = 'font-medium text-gray-700';
+              moduleName.textContent = module;
+
+              const status = document.createElement('span');
+              status.className = `${statusColor} text-sm font-semibold cursor-help`;
+              status.textContent = `${statusIcon} ${limitedCount}/${totalCount} limité(s)`;
+
+              // Add tooltip explaining rate limiting
+              if (limitedCount > 0) {
+                status.title = `⚠️ ${limitedCount} variable(s) en rate limit (5s minimum entre sauvegardes).\nLes messages trop fréquents sont ignorés pour protéger la base de données.`;
+              } else {
+                status.title = `✅ Aucune variable limitée actuellement.\nRate limit: 5s minimum entre sauvegardes DB par variable.`;
+              }
+
+              innerDiv.appendChild(moduleName);
+              innerDiv.appendChild(status);
+              div.appendChild(innerDiv);
+              container.appendChild(div);
+            }
+          });
+      }
+
+      // Refresh stats every minute
+      setInterval(updateMessageStats, 60000);
+      setInterval(updatePublicationStats, 60000);
+      setInterval(updateRateLimitStatus, 5000); // Update rate limit more frequently
+
+      // --- Modal & History Chart ---
+      function openChart(module, variable) {
+        const modal = document.getElementById('chartModal');
+        document.getElementById('modalTitle').innerText = `${module} - ${variable} `;
+        document.body.classList.add('modal-active');
+
+        fetch(`/ api / history / ${module}/${variable}`)
+          .then(response => response.json())
+          .then(data => {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+
+            if (historyChartInstance) {
+              historyChartInstance.destroy();
+            }
+
+            const labels = data.map(d => new Date(d[1]).toLocaleTimeString());
+            const values = data.map(d => {
               const val = parseFloat(d[0]);
               return isNaN(val) ? null : val;
             });
 
-            sparklineCharts[chartKey].data.labels = recentData.map(() => '');
-            sparklineCharts[chartKey].data.datasets[0].data = values;
-            sparklineCharts[chartKey].update(); // Smooth animation on update
-          }
-        })
-        .catch(err => console.log('Sparkline update skipped:', err));
-    }
-
-    function initAllSparklines() {
-      // Find all sparkline canvases and create charts
-      document.querySelectorAll('[id^="sparkline-"]').forEach(canvas => {
-        const parts = canvas.id.replace('sparkline-', '').split('-');
-        if (parts.length >= 2) {
-          const variable = parts.pop();
-          const module = parts.join('-');
-          createSparkline(module, variable);
-        }
-      });
-    }
-
-    // --- Charts ---
-    function initMessageStatsChart() {
-      const ctx = document.getElementById('messageStatsChart').getContext('2d');
-
-      // Create gradient matching sparklines
-      const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
-      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.01)');
-
-      messageStatsChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [
-            {
-              label: 'Messages par minute',
-              data: [],
-              backgroundColor: gradient,
-              borderColor: 'rgba(59, 130, 246, 0.9)',
-              borderWidth: 2,
-              tension: 0.4,
-              pointRadius: 3,
-              pointBackgroundColor: 'rgba(59, 130, 246, 1)',
-              pointBorderColor: '#fff',
-              pointBorderWidth: 2,
-              pointHoverRadius: 5,
-              fill: true
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          animation: {
-            duration: 750,
-            easing: 'easeInOutQuart'
-          },
-          interaction: {
-            mode: 'index',
-            intersect: false,
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              grid: {
-                color: 'rgba(0, 0, 0, 0.05)'
-              }
-            },
-            x: {
-              grid: {
-                display: false
-              }
-            }
-          },
-          plugins: {
-            legend: {
-              display: true,
-              labels: {
-                color: 'rgb(75, 85, 99)',
-                font: {
-                  size: 12
-                }
-              }
-            }
-          }
-        }
-      });
-      updateMessageStats();
-    }
-
-    function updateMessageStats() {
-      fetch('/api/stats/messages')
-        .then(response => response.json())
-        .then(data => {
-          if (messageStatsChartInstance) {
-            const labels = data.map(d => d[0].split(' ')[1]);
-            const values = data.map(d => d[1]);
-
-            messageStatsChartInstance.data.labels = labels;
-            messageStatsChartInstance.data.datasets[0].data = values;
-
-            messageStatsChartInstance.update();
-          }
-        });
-    }
-
-    // --- Publication Stats Chart (Trend Lines) ---
-    const moduleColors = [
-      { border: 'rgba(59, 130, 246, 0.9)', bg: 'rgba(59, 130, 246, 0.1)' },  // Blue
-      { border: 'rgba(239, 68, 68, 0.9)', bg: 'rgba(239, 68, 68, 0.1)' },    // Red
-      { border: 'rgba(34, 197, 94, 0.9)', bg: 'rgba(34, 197, 94, 0.1)' },    // Green
-      { border: 'rgba(251, 146, 60, 0.9)', bg: 'rgba(251, 146, 60, 0.1)' },  // Orange
-      { border: 'rgba(168, 85, 247, 0.9)', bg: 'rgba(168, 85, 247, 0.1)' },  // Purple
-      { border: 'rgba(236, 72, 153, 0.9)', bg: 'rgba(236, 72, 153, 0.1)' },  // Pink
-    ];
-
-    function initPublicationStatsChart() {
-      const ctx = document.getElementById('publicationStatsChart').getContext('2d');
-
-      publicationStatsChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: []
-        },
-        options: {
-          responsive: true,
-          animation: {
-            duration: 750,
-            easing: 'easeInOutQuart'
-          },
-          interaction: {
-            mode: 'index',
-            intersect: false,
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              grid: {
-                color: 'rgba(0, 0, 0, 0.05)'
+            historyChartInstance = new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels: labels,
+                datasets: [{
+                  label: variable,
+                  data: values,
+                  borderColor: 'rgb(59, 130, 246)',
+                  tension: 0.1,
+                  fill: false
+                }]
               },
-              title: {
-                display: true,
-                text: 'Messages / heure',
-                color: 'rgb(75, 85, 99)'
-              }
-            },
-            x: {
-              grid: {
-                display: false
-              }
-            }
-          },
-          plugins: {
-            legend: {
-              display: true,
-              position: 'top',
-              labels: {
-                color: 'rgb(75, 85, 99)',
-                font: {
-                  size: 11
-                },
-                usePointStyle: true
-              }
-            },
-            tooltip: {
-              callbacks: {
-                label: function (context) {
-                  return `${context.dataset.label}: ${context.parsed.y} msg / h`;
+              options: {
+                responsive: true,
+                scales: {
+                  x: { display: true },
+                  y: { beginAtZero: false }
                 }
               }
-            }
-          }
-        }
-      });
-      updatePublicationStats();
-    }
-
-    function updatePublicationStats() {
-      fetch('/api/stats/publications')
-        .then(response => response.json())
-        .then(data => {
-          if (publicationStatsChartInstance && data.length > 0) {
-            // data format: [[module, hour, count], ...]
-            // Group by module and hour
-            const moduleData = {};
-            const allHours = new Set();
-
-            data.forEach(([module, hour, count]) => {
-              if (!moduleData[module]) {
-                moduleData[module] = {};
-              }
-              moduleData[module][hour] = count;
-              allHours.add(hour);
             });
-
-            // Sort hours
-            const sortedHours = Array.from(allHours).sort();
-
-            // Create datasets for each module
-            const datasets = Object.keys(moduleData).map((module, index) => {
-              const colorIndex = index % moduleColors.length;
-              const values = sortedHours.map(hour => moduleData[module][hour] || 0);
-
-              return {
-                label: module,
-                data: values,
-                borderColor: moduleColors[colorIndex].border,
-                backgroundColor: moduleColors[colorIndex].bg,
-                borderWidth: 2,
-                tension: 0.4,
-                pointRadius: 3,
-                pointBackgroundColor: moduleColors[colorIndex].border,
-                pointBorderColor: '#fff',
-                pointBorderWidth: 1,
-                pointHoverRadius: 5,
-                fill: false
-              };
-            });
-
-            // Format hour labels (show only HH:00)
-            const labels = sortedHours.map(h => h.split(' ')[1] || h.split('T')[1] || h);
-
-            publicationStatsChartInstance.data.labels = labels;
-            publicationStatsChartInstance.data.datasets = datasets;
-            publicationStatsChartInstance.update();
-          }
-        });
-    }
-
-    // --- Rate Limit Status ---
-    function updateRateLimitStatus() {
-      fetch('/api/stats/rate-limit')
-        .then(response => response.json())
-        .then(data => {
-          const container = document.getElementById('rate-limit-status');
-          container.innerHTML = ''; // Clear first
-
-          if (Object.keys(data).length === 0) {
-            const p = document.createElement('p');
-            p.className = 'text-gray-500 text-sm';
-            p.textContent = 'Aucune donnée disponible';
-            container.appendChild(p);
-            return;
-          }
-
-          for (const [module, variables] of Object.entries(data)) {
-            const limitedCount = variables.filter(v => v.is_limited).length;
-            const totalCount = variables.length;
-            const statusColor = limitedCount > 0 ? 'text-orange-600' : 'text-green-600';
-            const statusIcon = limitedCount > 0 ? '⏳' : '✅';
-
-            const div = document.createElement('div');
-            div.className = 'border-b border-gray-100 pb-2 last:border-0';
-
-            const innerDiv = document.createElement('div');
-            innerDiv.className = 'flex justify-between items-center';
-
-            const moduleName = document.createElement('span');
-            moduleName.className = 'font-medium text-gray-700';
-            moduleName.textContent = module;
-
-            const status = document.createElement('span');
-            status.className = `${statusColor} text-sm font-semibold cursor-help`;
-            status.textContent = `${statusIcon} ${limitedCount}/${totalCount} limité(s)`;
-
-            // Add tooltip explaining rate limiting
-            if (limitedCount > 0) {
-              status.title = `⚠️ ${limitedCount} variable(s) en rate limit (5s minimum entre sauvegardes).\nLes messages trop fréquents sont ignorés pour protéger la base de données.`;
-            } else {
-              status.title = `✅ Aucune variable limitée actuellement.\nRate limit: 5s minimum entre sauvegardes DB par variable.`;
-            }
-
-            innerDiv.appendChild(moduleName);
-            innerDiv.appendChild(status);
-            div.appendChild(innerDiv);
-            container.appendChild(div);
-          }
-        });
-    }
-
-    // Refresh stats every minute
-    setInterval(updateMessageStats, 60000);
-    setInterval(updatePublicationStats, 60000);
-    setInterval(updateRateLimitStatus, 5000); // Update rate limit more frequently
-
-    // --- Modal & History Chart ---
-    function openChart(module, variable) {
-      const modal = document.getElementById('chartModal');
-      document.getElementById('modalTitle').innerText = `${module} - ${variable} `;
-      document.body.classList.add('modal-active');
-
-      fetch(`/ api / history / ${module}/${variable}`)
-        .then(response => response.json())
-        .then(data => {
-          const ctx = document.getElementById('historyChart').getContext('2d');
-
-          if (historyChartInstance) {
-            historyChartInstance.destroy();
-          }
-
-          const labels = data.map(d => new Date(d[1]).toLocaleTimeString());
-          const values = data.map(d => {
-            const val = parseFloat(d[0]);
-            return isNaN(val) ? null : val;
           });
+      }
 
-          historyChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels: labels,
-              datasets: [{
-                label: variable,
-                data: values,
-                borderColor: 'rgb(59, 130, 246)',
-                tension: 0.1,
-                fill: false
-              }]
-            },
-            options: {
-              responsive: true,
-              scales: {
-                x: { display: true },
-                y: { beginAtZero: false }
-              }
-            }
-          });
-        });
-    }
+      function closeModal() {
+        const modal = document.getElementById('chartModal');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        document.body.classList.remove('modal-active');
+      }
 
-    function closeModal() {
-      const modal = document.getElementById('chartModal');
-      modal.classList.add('opacity-0', 'pointer-events-none');
-      document.body.classList.remove('modal-active');
-    }
+      document.querySelector('.modal-overlay').addEventListener('click', closeModal);
 
-    document.querySelector('.modal-overlay').addEventListener('click', closeModal);
+      // --- Socket.IO ---
+      socket.on('update_data', function (data) {
+        const module = data.module;
+        const variable = data.variable;
+        const value = data.value;
+        const timestamp = data.timestamp;
 
-    // --- Socket.IO ---
-    socket.on('update_data', function (data) {
-      const module = data.module;
-      const variable = data.variable;
-      const value = data.value;
-      const timestamp = data.timestamp;
+        // Remove "no data" message if exists
+        const noDataMsg = document.getElementById('no-data-msg');
+        if (noDataMsg) noDataMsg.remove();
 
-      // Remove "no data" message if exists
-      const noDataMsg = document.getElementById('no-data-msg');
-      if (noDataMsg) noDataMsg.remove();
-
-      // Check if module exists
-      let moduleDiv = document.getElementById(`module-${module}`);
-      if (!moduleDiv) {
-        const container = document.getElementById('dashboard-container');
-        moduleDiv = document.createElement('div');
-        moduleDiv.id = `module-${module}`;
-        moduleDiv.className = 'bg-white rounded-2xl shadow p-6 fade-in';
-        moduleDiv.innerHTML = `
+        // Check if module exists
+        let moduleDiv = document.getElementById(`module-${module}`);
+        if (!moduleDiv) {
+          const container = document.getElementById('dashboard-container');
+          moduleDiv = document.createElement('div');
+          moduleDiv.id = `module-${module}`;
+          moduleDiv.className = 'bg-white rounded-2xl shadow p-6 fade-in';
+          moduleDiv.innerHTML = `
           <h2 class="text-xl font-semibold mb-4 capitalize">${module.replace(/_/g, " ")}</h2>
           <div id="vars-${module}" class="space-y-3 max-h-96 overflow-y-auto pr-2" style="scrollbar-width: thin; scrollbar-color: rgba(59, 130, 246, 0.3) transparent;"></div>
         `;
-        container.appendChild(moduleDiv);
-      }
+          container.appendChild(moduleDiv);
+        }
 
-      // Check if variable exists
-      let varDiv = document.getElementById(`var-${module}-${variable}`);
-      if (!varDiv) {
-        const varsContainer = document.getElementById(`vars-${module}`);
-        varDiv = document.createElement('div');
-        varDiv.id = `var-${module}-${variable}`;
-        varDiv.className = 'border-b border-gray-100 pb-3 last:border-0';
-        varDiv.innerHTML = `
+        // Check if variable exists
+        let varDiv = document.getElementById(`var-${module}-${variable}`);
+        if (!varDiv) {
+          const varsContainer = document.getElementById(`vars-${module}`);
+          varDiv = document.createElement('div');
+          varDiv.id = `var-${module}-${variable}`;
+          varDiv.className = 'border-b border-gray-100 pb-3 last:border-0';
+          varDiv.innerHTML = `
           <div class="flex justify-between items-start mb-2">
             <span class="text-gray-600 font-medium">${variable.replace(/_/g, " ")}</span>
             <div class="text-right">
@@ -757,62 +835,62 @@
           </div>
           <canvas id="sparkline-${module}-${variable}" class="w-full h-12" style="max-height: 48px;"></canvas>
         `;
-        varsContainer.appendChild(varDiv);
+          varsContainer.appendChild(varDiv);
 
-        // Create sparkline for new variable
-        createSparkline(module, variable);
-      } else {
-        varDiv.classList.remove('highlight');
-        void varDiv.offsetWidth; // trigger reflow
-        varDiv.classList.add('highlight');
-      }
+          // Create sparkline for new variable
+          createSparkline(module, variable);
+        } else {
+          varDiv.classList.remove('highlight');
+          void varDiv.offsetWidth; // trigger reflow
+          varDiv.classList.add('highlight');
+        }
 
-      // Update values
-      varDiv.querySelector('.value').textContent = value;
-      const timeEl = varDiv.querySelector('.timestamp');
-      timeEl.setAttribute('data-time', timestamp);
-      timeEl.innerHTML = '🕒 il y a ' + timeSince(new Date(timestamp));
+        // Update values
+        varDiv.querySelector('.value').textContent = value;
+        const timeEl = varDiv.querySelector('.timestamp');
+        timeEl.setAttribute('data-time', timestamp);
+        timeEl.innerHTML = '🕒 il y a ' + timeSince(new Date(timestamp));
 
-      // Update sparkline if it exists
-      updateSparkline(module, variable);
+        // Update sparkline if it exists
+        updateSparkline(module, variable);
 
-      // Update stats chart slightly delayed to catch the new count
-      setTimeout(updateMessageStats, 1000);
-    });
+        // Update stats chart slightly delayed to catch the new count
+        setTimeout(updateMessageStats, 1000);
+      });
 
-    socket.on('delete_data', function (data) {
-      const varDiv = document.getElementById(`var-${data.module}-${data.variable}`);
-      if (varDiv) varDiv.remove();
+      socket.on('delete_data', function (data) {
+        const varDiv = document.getElementById(`var-${data.module}-${data.variable}`);
+        if (varDiv) varDiv.remove();
 
-      const varsContainer = document.getElementById(`vars-${data.module}`);
-      if (varsContainer && varsContainer.children.length === 0) {
-        const moduleDiv = document.getElementById(`module-${data.module}`);
-        if (moduleDiv) moduleDiv.remove();
-      }
-    });
+        const varsContainer = document.getElementById(`vars-${data.module}`);
+        if (varsContainer && varsContainer.children.length === 0) {
+          const moduleDiv = document.getElementById(`module-${data.module}`);
+          if (moduleDiv) moduleDiv.remove();
+        }
+      });
 
-    socket.on('new_message', function (msg) {
-      const list = document.getElementById('messages-list');
-      const div = document.createElement('div');
-      div.className = 'flex justify-between border-b border-gray-200 pb-1 fade-in';
-      div.innerHTML = `
+      socket.on('new_message', function (msg) {
+        const list = document.getElementById('messages-list');
+        const div = document.createElement('div');
+        div.className = 'flex justify-between border-b border-gray-200 pb-1 fade-in';
+        div.innerHTML = `
         <span class="text-gray-600">${msg.topic}</span>
         <div class="text-right">
           <div class="font-bold text-gray-900">${msg.payload}</div>
           <div class="text-xs text-gray-500">🕒 il y a quelques secondes</div>
         </div>
       `;
-      list.prepend(div);
-      if (list.children.length > 100) {
-        list.lastElementChild.remove();
-      }
-    });
+        list.prepend(div);
+        if (list.children.length > 100) {
+          list.lastElementChild.remove();
+        }
+      });
 
-    // Init
-    initMessageStatsChart();
-    initPublicationStatsChart();
-    updateRateLimitStatus(); // Initial load
-    initAllSparklines();
+      // Init
+      initMessageStatsChart();
+      initPublicationStatsChart();
+      updateRateLimitStatus(); // Initial load
+      initAllSparklines();
   </script>
 </body>
 
