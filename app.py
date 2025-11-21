@@ -104,15 +104,15 @@ def get_rate_limit_status():
     
     return jsonify(grouped)
 
-# --- Student Page Routes ---
-@app.route("/student")
-def student_page():
+# --- Test Page Routes (for students) ---
+@app.route("/test")
+def test_page():
     """Interactive page for students to publish and subscribe to MQTT"""
-    return render_template("student.html")
+    return render_template("test.html")
 
-@app.route("/api/student/publish", methods=["POST"])
-def student_publish():
-    """Publish MQTT message from student interface"""
+@app.route("/api/test/publish", methods=["POST"])
+def test_publish():
+    """Publish MQTT message from test interface"""
     data = request.get_json()
     project = data.get('project', '').strip()
     variable = data.get('variable', '').strip()
@@ -121,13 +121,22 @@ def student_publish():
     if not project or not variable or not value:
         return jsonify({"error": "Missing project, variable, or value"}), 400
     
-    # Publish to MQTT
-    topic = f"ferme/data/out/{project}/{variable}"
+    # Publish to MQTT with correct topic format: bzh/mecatro/dashboard/<project>/<variable>
+    topic = f"bzh/mecatro/dashboard/{project}/{variable}"
     try:
         mqtt_client.publish(topic, value)
         return jsonify({"success": True, "topic": topic, "value": value})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/api/test/subscribe/<project>")
+def test_subscribe(project):
+    """Subscribe to project topics (for testing)"""
+    # This would require WebSocket or SSE for real-time updates
+    # For now, return current data for the project
+    if project in dashboard_data:
+        return jsonify(dashboard_data[project])
+    return jsonify({})
 
 # --- Admin Routes ---
 @app.route("/login", methods=["GET", "POST"])

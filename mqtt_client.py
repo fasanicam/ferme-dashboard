@@ -29,8 +29,16 @@ logging.basicConfig(
 )
 
 def on_connect(client, userdata, flags, rc):
-    logging.info("Connecté au broker MQTT avec le code %s", rc)
-    client.subscribe("bzh/mecatro/#")  # Subscribe à tous les topics sous bzh/mecatro
+    if rc == 0:
+        logging.info("✅ Connecté au broker MQTT: mqtt.dev.icam.school")
+        client.subscribe("bzh/mecatro/dashboard/#")
+        logging.info("📡 Abonné au topic: bzh/mecatro/dashboard/#")
+    else:
+        logging.error("❌ Échec de connexion au broker MQTT, code: %s. Tentative de reconnexion...", rc)
+        try:
+            client.reconnect()
+        except Exception as e:
+            logging.error("Erreur lors de la reconnexion : %s", e)
 
 def on_disconnect(client, userdata, rc):
     logging.warning("Déconnecté du broker MQTT (code %s). Tentative de reconnexion...", rc)
@@ -62,17 +70,15 @@ def on_message(client, userdata, msg):
         # Emit new message event
         if hasattr(client, 'socketio'):
             client.socketio.emit('new_message', message_data)
-
-        parts = topic.split('/')
         
-        # Vérifie si le topic commence par bzh/mecatro/dashboard
-        if not topic.startswith("bzh/mecatro/dashboard/"):
-            return
-            
-        if len(parts) < 5:
+        # Parse topic: bzh/mecatro/dashboard/<project>/<variable>
+        parts = topic.split('/')
+        if len(parts) < 5 or parts[0] != 'bzh' or parts[1] != 'mecatro' or parts[2] != 'dashboard':
+            logging.warning("Topic malformé (attendu: bzh/mecatro/dashboard/<projet>/<variable>): %s", topic)
             return
 
-        module, variable = parts[3], parts[4]
+        module = parts[3]  # project name
+        variable = parts[4]  # variable name
         
         # Track publication count per module (in-memory counter)
         module_message_count[module] += 1
@@ -87,8 +93,7 @@ def on_message(client, userdata, msg):
                 # Si le module n'a plus de variables, le supprimer aussi
                 if not dashboard_data[module]:
                     del dashboard_data[module]
-                
-                # Emit delete event
+                # Emit deletion event
                 if hasattr(client, 'socketio'):
                     client.socketio.emit('delete_data', {'module': module, 'variable': variable})
             return
