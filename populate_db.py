@@ -14,14 +14,14 @@ def populate():
     # c.execute("DELETE FROM measurements")
     # c.execute("DELETE FROM message_stats")
     
-    # Generate data for the last 24 hours
+    # Generate data for the last 7 days (more data for richer charts)
     now = datetime.now()
     
     modules = ['test_module', 'another_module', 'sensor_hub']
     variables = ['temperature', 'humidity', 'pressure', 'light_level']
     
-    # 1. Measurements (every 10 minutes)
-    current_time = now - timedelta(hours=24)
+    # 1. Measurements (every 5 minutes for more granularity)
+    current_time = now - timedelta(days=7)
     while current_time <= now:
         for module in modules:
             for variable in variables:
@@ -49,11 +49,11 @@ def populate():
                 c.execute("INSERT INTO measurements (module, variable, value, timestamp) VALUES (?, ?, ?, ?)",
                           (module, variable, val, current_time))
         
-        current_time += timedelta(minutes=10)
+        current_time += timedelta(minutes=5)
         
     # 2. Message Stats (per minute)
-    # We'll just generate stats for the last 60 minutes for the chart
-    current_time = now - timedelta(minutes=60)
+    # We'll just generate stats for the last 120 minutes for the chart
+    current_time = now - timedelta(minutes=120)
     while current_time <= now:
         # Random count between 5 and 50
         count = random.randint(5, 50)

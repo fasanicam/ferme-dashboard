@@ -94,23 +94,27 @@
     <div id="module-{{ module }}"
       class="bg-white rounded-2xl shadow-lg p-6 fade-in hover:shadow-xl transition-shadow duration-300">
       <h2 class="text-xl font-bold mb-4 capitalize text-gray-700 border-b pb-2">{{ module.replace("_", " ") }}</h2>
-      <div id="vars-{{ module }}" class="space-y-3">
+      <div id="vars-{{ module }}" class="space-y-3 max-h-96 overflow-y-auto pr-2"
+        style="scrollbar-width: thin; scrollbar-color: rgba(59, 130, 246, 0.3) transparent;">
         {% for variable, value in variables.items() %}
-        <div id="var-{{ module }}-{{ variable }}"
-          class="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0">
-          <span class="text-gray-600 font-medium">{{ variable.replace("_", " ") }}</span>
-          <div class="text-right">
-            <div class="flex items-center justify-end gap-2">
-              <div class="value font-bold text-gray-900 text-lg">{{ value.valeur }}</div>
-              <button onclick="openChart('{{ module }}', '{{ variable }}')"
-                class="text-gray-400 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-50"
-                title="Voir l'historique">
-                📊
-              </button>
+        <div id="var-{{ module }}-{{ variable }}" class="border-b border-gray-100 pb-3 last:border-0">
+          <div class="flex justify-between items-start mb-2">
+            <span class="text-gray-600 font-medium">{{ variable.replace("_", " ") }}</span>
+            <div class="text-right">
+              <div class="flex items-center justify-end gap-2">
+                <div class="value font-bold text-gray-900 text-lg">{{ value.valeur }}</div>
+                <button onclick="openChart('{{ module }}', '{{ variable }}')"
+                  class="text-gray-400 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-50"
+                  title="Voir l'historique">
+                  📊
+                </button>
+              </div>
+              <div class="timestamp text-xs text-gray-400" data-time="{{ value.derniere_maj }}">🕒 {{
+                delay(value.derniere_maj) }}</div>
             </div>
-            <div class="timestamp text-xs text-gray-400" data-time="{{ value.derniere_maj }}">🕒 {{
-              delay(value.derniere_maj) }}</div>
           </div>
+          <!-- Sparkline chart -->
+          <canvas id="sparkline-{{ module }}-{{ variable }}" class="w-full h-12" style="max-height: 48px;"></canvas>
         </div>
         {% endfor %}
       </div>
@@ -211,9 +215,102 @@
     }
     setInterval(updateTimestamps, 10000);
 
+    // --- Sparkline Charts ---
+    const sparklineCharts = {};
+
+    function createSparkline(module, variable) {
+      const canvasId = `sparkline-${module}-${variable}`;
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      const chartKey = `${module}-${variable}`;
+
+      // Create gradient for sparkline
+      const gradient = ctx.createLinearGradient(0, 0, 0, 48);
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.01)');
+
+      // Create mini chart
+      sparklineCharts[chartKey] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            data: [],
+            borderColor: 'rgba(59, 130, 246, 0.9)',
+            backgroundColor: gradient,
+            borderWidth: 2,
+            tension: 0.4,
+            pointRadius: 0,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: {
+            duration: 750,
+            easing: 'easeInOutQuart'
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: false }
+          },
+          scales: {
+            x: { display: false },
+            y: { display: false }
+          },
+          interaction: { mode: null }
+        }
+      });
+
+      // Load data for sparkline (last 20 points)
+      updateSparkline(module, variable);
+    }
+
+    function updateSparkline(module, variable) {
+      const chartKey = `${module}-${variable}`;
+      fetch(`/api/history/${module}/${variable}`)
+        .then(response => response.json())
+        .then(data => {
+          if (sparklineCharts[chartKey] && data.length > 0) {
+            // Take last 20 points for sparkline
+            const recentData = data.slice(-20);
+            const values = recentData.map(d => {
+              const val = parseFloat(d[0]);
+              return isNaN(val) ? null : val;
+            });
+
+            sparklineCharts[chartKey].data.labels = recentData.map(() => '');
+            sparklineCharts[chartKey].data.datasets[0].data = values;
+            sparklineCharts[chartKey].update(); // Smooth animation on update
+          }
+        })
+        .catch(err => console.log('Sparkline update skipped:', err));
+    }
+
+    function initAllSparklines() {
+      // Find all sparkline canvases and create charts
+      document.querySelectorAll('[id^="sparkline-"]').forEach(canvas => {
+        const parts = canvas.id.replace('sparkline-', '').split('-');
+        if (parts.length >= 2) {
+          const variable = parts.pop();
+          const module = parts.join('-');
+          createSparkline(module, variable);
+        }
+      });
+    }
+
     // --- Charts ---
     function initMessageStatsChart() {
       const ctx = document.getElementById('messageStatsChart').getContext('2d');
+
+      // Create gradient for bars
+      const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+      gradient.addColorStop(0, 'rgba(75, 192, 192, 0.8)');
+      gradient.addColorStop(1, 'rgba(75, 192, 192, 0.2)');
+
       messageStatsChartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -222,9 +319,10 @@
             {
               label: 'Messages reçus',
               data: [],
-              backgroundColor: 'rgba(75, 192, 192, 0.5)',
+              backgroundColor: gradient,
               borderColor: 'rgba(75, 192, 192, 1)',
-              borderWidth: 1,
+              borderWidth: 2,
+              borderRadius: 4,
               order: 2
             },
             {
@@ -232,15 +330,21 @@
               data: [],
               type: 'line',
               borderColor: 'rgba(255, 99, 132, 1)',
+              backgroundColor: 'rgba(255, 99, 132, 0.1)',
               borderWidth: 2,
               tension: 0.4,
               pointRadius: 0,
+              fill: true,
               order: 1
             }
           ]
         },
         options: {
           responsive: true,
+          animation: {
+            duration: 750,
+            easing: 'easeInOutQuart'
+          },
           interaction: {
             mode: 'index',
             intersect: false,
@@ -346,7 +450,7 @@
         moduleDiv.className = 'bg-white rounded-2xl shadow p-6 fade-in';
         moduleDiv.innerHTML = `
           <h2 class="text-xl font-semibold mb-4 capitalize">${module.replace(/_/g, " ")}</h2>
-          <div id="vars-${module}" class="space-y-2"></div>
+          <div id="vars-${module}" class="space-y-3 max-h-96 overflow-y-auto pr-2" style="scrollbar-width: thin; scrollbar-color: rgba(59, 130, 246, 0.3) transparent;"></div>
         `;
         container.appendChild(moduleDiv);
       }
@@ -357,20 +461,26 @@
         const varsContainer = document.getElementById(`vars-${module}`);
         varDiv = document.createElement('div');
         varDiv.id = `var-${module}-${variable}`;
-        varDiv.className = 'flex justify-between items-center border-b border-gray-200 pb-1 highlight';
+        varDiv.className = 'border-b border-gray-100 pb-3 last:border-0';
         varDiv.innerHTML = `
-          <span class="text-gray-600">${variable.replace(/_/g, " ")}</span>
-          <div class="text-right">
-            <div class="flex items-center justify-end gap-2">
-              <div class="value font-bold text-gray-900"></div>
-              <button onclick="openChart('${module}', '${variable}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Voir l'historique">
-                📊
-              </button>
+          <div class="flex justify-between items-start mb-2">
+            <span class="text-gray-600 font-medium">${variable.replace(/_/g, " ")}</span>
+            <div class="text-right">
+              <div class="flex items-center justify-end gap-2">
+                <div class="value font-bold text-gray-900 text-lg"></div>
+                <button onclick="openChart('${module}', '${variable}')" class="text-gray-400 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-50" title="Voir l'historique">
+                  📊
+                </button>
+              </div>
+              <div class="timestamp text-xs text-gray-400"></div>
             </div>
-            <div class="timestamp text-xs text-gray-500"></div>
           </div>
+          <canvas id="sparkline-${module}-${variable}" class="w-full h-12" style="max-height: 48px;"></canvas>
         `;
         varsContainer.appendChild(varDiv);
+
+        // Create sparkline for new variable
+        createSparkline(module, variable);
       } else {
         varDiv.classList.remove('highlight');
         void varDiv.offsetWidth; // trigger reflow
@@ -382,6 +492,9 @@
       const timeEl = varDiv.querySelector('.timestamp');
       timeEl.setAttribute('data-time', timestamp);
       timeEl.innerHTML = '🕒 il y a ' + timeSince(new Date(timestamp));
+
+      // Update sparkline if it exists
+      updateSparkline(module, variable);
 
       // Update stats chart slightly delayed to catch the new count
       setTimeout(updateMessageStats, 1000);
@@ -410,13 +523,14 @@
         </div>
       `;
       list.prepend(div);
-      if (list.children.length > 20) {
+      if (list.children.length > 100) {
         list.lastElementChild.remove();
       }
     });
 
     // Init
     initMessageStatsChart();
+    initAllSparklines();
   </script>
 </body>
 

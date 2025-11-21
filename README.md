@@ -146,7 +146,7 @@ Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 
 **fasanicam**
 
-- GitHub: [@fasanicam](https://github.com/fasanicam)
+- GitHub: [@fasanicam](https://github.com/fasanicam) David Fasani, Icam
 
 ## 🙏 Remerciements
 
