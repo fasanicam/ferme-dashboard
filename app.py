@@ -11,11 +11,8 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 socketio = SocketIO(app, async_mode='eventlet')
 
-# Admin password (hashed with bcrypt)
-# Default password: admin123
-ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', 
-    'pbkdf2:sha256:600000$9xKzJ8YvXqMfQRLZ$e8c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8f5e5c8')
-# To generate a new hash: from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))
+# Admin password
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'jesuisdavid')
 
 # Initialize DB
 database.init_db()
@@ -144,7 +141,7 @@ def login():
     if request.method == "POST":
         password = request.form.get("password")
         # For simplicity, we'll accept the plain password "admin123"
-        if password == "admin123":
+        if password == ADMIN_PASSWORD:
             session['admin_logged_in'] = True
             return redirect(url_for('admin'))
         else:
