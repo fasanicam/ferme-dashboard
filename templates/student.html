@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎓 Mon Projet IoT - Ferme Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        @keyframes pulse-arrow {
+
+            0%,
+            100% {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.1);
+            }
+        }
+
+        .arrow-animate {
+            animation: pulse-arrow 2s ease-in-out infinite;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-green-50 to-blue-50 min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                🎓 Mon Projet IoT
+            </h1>
+            <div class="flex gap-3">
+                <a href="/"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm md:text-base">
+                    📊 Dashboard
+                </a>
+                <a href="/admin"
+                    class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm md:text-base">
+                    🛠️ Admin
+                </a>
+            </div>
+        </div>
+
+        <!-- Project Name Input -->
+        <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+            <label for="projectName" class="block text-lg font-semibold text-gray-800 mb-3">
+                📝 Nom de mon projet :
+            </label>
+            <div class="flex gap-3">
+                <input type="text" id="projectName" placeholder="ex: aquaponie, ruche, serre..."
+                    class="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 transition-colors">
+                <button onclick="setProject()"
+                    class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold">
+                    ✓ Valider
+                </button>
+            </div>
+            <p id="projectStatus" class="mt-2 text-sm text-gray-500"></p>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Publish Section -->
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">📤 Publier une donnée</h2>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Variable :</label>
+                        <input type="text" id="variableName" placeholder="ex: temperature, humidity..."
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Valeur :</label>
+                        <input type="text" id="variableValue" placeholder="ex: 22.5, ON, 65..."
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <button onclick="publishData()"
+                        class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        id="publishBtn">
+                        📡 Publier
+                    </button>
+
+                    <div class="bg-orange-50 border-l-4 border-orange-500 p-3 rounded text-sm">
+                        <p class="text-orange-900">
+                            ⏱️ <strong>Rate limit :</strong> Maximum 1 publication toutes les 5 secondes par variable
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Recent Publications -->
+                <div class="mt-6">
+                    <h3 class="font-semibold text-gray-700 mb-2">Mes dernières publications :</h3>
+                    <div id="recentPublications" class="space-y-2 max-h-48 overflow-y-auto">
+                        <p class="text-gray-400 text-sm">Aucune publication pour le moment</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Flow Visualization -->
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">📊 Flux de données</h2>
+
+                <div class="flex flex-col items-center justify-center space-y-6 py-8">
+                    <!-- Maquette -->
+                    <div class="relative">
+                        <div
+                            class="bg-gradient-to-br from-green-500 to-green-600 text-white px-8 py-4 rounded-xl shadow-lg text-center">
+                            <div class="text-3xl mb-2">🔧</div>
+                            <div class="font-bold">Maquette</div>
+                            <div class="text-sm opacity-90">(Hardware)</div>
+                            <div id="maquetteCount" class="text-xs mt-2 bg-white/20 rounded px-2 py-1">0 msg/min</div>
+                        </div>
+                        <!-- Arrow down -->
+                        <div class="absolute left-1/2 transform -translate-x-1/2 mt-2 text-4xl arrow-animate">↕️</div>
+                    </div>
+
+                    <!-- App Mobile -->
+                    <div class="relative mt-8">
+                        <div
+                            class="bg-gradient-to-br from-blue-500 to-blue-600 text-white px-8 py-4 rounded-xl shadow-lg text-center">
+                            <div class="text-3xl mb-2">📱</div>
+                            <div class="font-bold">App Mobile</div>
+                            <div class="text-sm opacity-90">(Interface)</div>
+                            <div id="appCount" class="text-xs mt-2 bg-white/20 rounded px-2 py-1">0 msg/min</div>
+                        </div>
+                        <!-- Arrow down -->
+                        <div class="absolute left-1/2 transform -translate-x-1/2 mt-2 text-4xl arrow-animate">↕️</div>
+                    </div>
+
+                    <!-- Dashboard -->
+                    <div class="mt-8">
+                        <div
+                            class="bg-gradient-to-br from-purple-500 to-purple-600 text-white px-8 py-4 rounded-xl shadow-lg text-center">
+                            <div class="text-3xl mb-2">💻</div>
+                            <div class="font-bold">Dashboard</div>
+                            <div class="text-sm opacity-90">(Visualisation)</div>
+                            <div id="dashboardCount" class="text-xs mt-2 bg-white/20 rounded px-2 py-1">0 msg/min</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 bg-blue-50 border-l-4 border-blue-500 p-3 rounded text-sm">
+                    <p class="text-blue-900">
+                        💡 Les flèches montrent le sens de circulation des données entre les différents composants de
+                        votre système IoT.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages Received Section -->
+        <div class="bg-white rounded-2xl shadow-lg p-6 mt-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">📥 Messages reçus en temps réel</h2>
+            <div id="receivedMessages" class="space-y-2 max-h-96 overflow-y-auto">
+                <p class="text-gray-400 text-sm">En attente de messages...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentProject = '';
+        let publicationCount = 0;
+        let messageStats = { maquette: 0, app: 0, dashboard: 0 };
+
+        // Set project name
+        function setProject() {
+            const input = document.getElementById('projectName');
+            const project = input.value.trim().toLowerCase();
+
+            if (!project) {
+                alert('⚠️ Veuillez entrer un nom de projet');
+                return;
+            }
+
+            currentProject = project;
+            document.getElementById('projectStatus').innerHTML = `✅ Projet actif : <strong>${project}</strong>`;
+            document.getElementById('projectStatus').className = 'mt-2 text-sm text-green-600 font-semibold';
+            input.disabled = true;
+
+            // Subscribe to project messages via Socket.IO
+            socket.emit('subscribe_project', { project: currentProject });
+        }
+
+        // Publish data
+        function publishData() {
+            if (!currentProject) {
+                alert('⚠️ Veuillez d\'abord définir un nom de projet');
+                return;
+            }
+
+            const variable = document.getElementById('variableName').value.trim();
+            const value = document.getElementById('variableValue').value.trim();
+
+            if (!variable || !value) {
+                alert('⚠️ Veuillez remplir la variable et la valeur');
+                return;
+            }
+
+            const btn = document.getElementById('publishBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Publication...';
+
+            fetch('/api/student/publish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project: currentProject,
+                    variable: variable,
+                    value: value
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        addPublication(variable, value, data.topic);
+                        document.getElementById('variableValue').value = '';
+
+                        // Re-enable button after 5 seconds (rate limit)
+                        setTimeout(() => {
+                            btn.disabled = false;
+                            btn.textContent = '📡 Publier';
+                        }, 5000);
+                    } else {
+                        alert('❌ Erreur : ' + (data.error || 'Erreur inconnue'));
+                        btn.disabled = false;
+                        btn.textContent = '📡 Publier';
+                    }
+                })
+                .catch(error => {
+                    alert('❌ Erreur réseau : ' + error);
+                    btn.disabled = false;
+                    btn.textContent = '📡 Publier';
+                });
+        }
+
+        // Add publication to recent list
+        function addPublication(variable, value, topic) {
+            const container = document.getElementById('recentPublications');
+
+            // Remove placeholder
+            if (container.querySelector('.text-gray-400')) {
+                container.innerHTML = '';
+            }
+
+            const div = document.createElement('div');
+            div.className = 'bg-green-50 border-l-4 border-green-500 p-2 rounded text-sm fade-in';
+            div.innerHTML = `
+        <div class="flex justify-between">
+          <span class="font-semibold text-green-900">${variable}</span>
+          <span class="text-green-700">${value}</span>
+        </div>
+        <div class="text-xs text-green-600 mt-1">Topic: ${topic}</div>
+        <div class="text-xs text-gray-500">il y a quelques secondes</div>
+      `;
+
+            container.prepend(div);
+
+            // Keep only last 10
+            while (container.children.length > 10) {
+                container.lastChild.remove();
+            }
+
+            publicationCount++;
+            updateFlowStats();
+        }
+
+        // Add received message
+        function addReceivedMessage(topic, payload, timestamp) {
+            const container = document.getElementById('receivedMessages');
+
+            // Remove placeholder
+            if (container.querySelector('.text-gray-400')) {
+                container.innerHTML = '';
+            }
+
+            const div = document.createElement('div');
+            div.className = 'bg-blue-50 border-l-4 border-blue-500 p-3 rounded fade-in';
+
+            // Extract variable from topic
+            const parts = topic.split('/');
+            const variable = parts[parts.length - 1] || 'unknown';
+
+            div.innerHTML = `
+        <div class="flex justify-between items-start">
+          <div class="flex-1">
+            <div class="font-semibold text-blue-900">${variable}</div>
+            <div class="text-lg text-blue-700 font-bold">${payload}</div>
+            <div class="text-xs text-gray-500 mt-1">Topic: ${topic}</div>
+          </div>
+          <div class="text-xs text-gray-500">${timeSince(timestamp)}</div>
+        </div>
+      `;
+
+            container.prepend(div);
+
+            // Keep only last 20
+            while (container.children.length > 20) {
+                container.lastChild.remove();
+            }
+
+            updateFlowStats();
+        }
+
+        // Update flow statistics
+        function updateFlowStats() {
+            // Simple counter for demo - in real app would track actual message directions
+            document.getElementById('maquetteCount').textContent = `${Math.floor(Math.random() * 20)} msg/min`;
+            document.getElementById('appCount').textContent = `${Math.floor(Math.random() * 15)} msg/min`;
+            document.getElementById('dashboardCount').textContent = `${publicationCount} msg total`;
+        }
+
+        // Time since helper
+        function timeSince(timestamp) {
+            const now = new Date();
+            const past = new Date(timestamp);
+            const seconds = Math.floor((now - past) / 1000);
+            if (seconds < 60) return `il y a ${seconds}s`;
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `il y a ${minutes}min`;
+            const hours = Math.floor(minutes / 60);
+            return `il y a ${hours}h`;
+        }
+
+        // Socket.IO listeners
+        socket.on('update_data', function (data) {
+            if (currentProject && data.module === currentProject) {
+                const timestamp = data.timestamp || new Date().toISOString();
+                const topic = `ferme/data/in/${data.module}/${data.variable}`;
+                addReceivedMessage(topic, data.value, timestamp);
+            }
+        });
+
+        socket.on('new_message', function (msg) {
+            if (currentProject && msg.topic.includes(currentProject)) {
+                addReceivedMessage(msg.topic, msg.payload, new Date().toISOString());
+            }
+        });
+
+        // Enter key support
+        document.getElementById('projectName').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') setProject();
+        });
+
+        document.getElementById('variableValue').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') publishData();
+        });
+    </script>
+</body>
+
+</html>

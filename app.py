@@ -104,6 +104,31 @@ def get_rate_limit_status():
     
     return jsonify(grouped)
 
+# --- Student Page Routes ---
+@app.route("/student")
+def student_page():
+    """Interactive page for students to publish and subscribe to MQTT"""
+    return render_template("student.html")
+
+@app.route("/api/student/publish", methods=["POST"])
+def student_publish():
+    """Publish MQTT message from student interface"""
+    data = request.get_json()
+    project = data.get('project', '').strip()
+    variable = data.get('variable', '').strip()
+    value = data.get('value', '').strip()
+    
+    if not project or not variable or not value:
+        return jsonify({"error": "Missing project, variable, or value"}), 400
+    
+    # Publish to MQTT
+    topic = f"ferme/data/out/{project}/{variable}"
+    try:
+        mqtt_client.publish(topic, value)
+        return jsonify({"success": True, "topic": topic, "value": value})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # --- Admin Routes ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
