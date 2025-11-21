@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard Ferme connectée</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌱</text></svg>">
+  <style>
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .highlight {
+      animation: highlight 1s ease-out;
+    }
+
+    @keyframes highlight {
+      0% {
+        background-color: #dcfce7;
+      }
+
+      100% {
+        background-color: transparent;
+      }
+    }
+
+    /* Title Animation */
+    @keyframes float {
+      0% {
+        transform: translateY(0px);
+      }
+
+      50% {
+        transform: translateY(-5px);
+      }
+
+      100% {
+        transform: translateY(0px);
+      }
+    }
+
+    .animate-float {
+      animation: float 3s ease-in-out infinite;
+    }
+
+    /* Modal styles */
+    .modal {
+      transition: opacity 0.25s ease;
+    }
+
+    body.modal-active {
+      overflow-x: hidden;
+      overflow-y: visible !important;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-100 text-gray-800 font-sans p-6">
+  <div class="relative flex justify-center items-center mb-6">
+    <h1
+      class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-teal-500 drop-shadow-sm flex items-center gap-3">
+      <span class="animate-float text-5xl">🌱</span> Dashboard - Ferme connectée
+    </h1>
+    <div
+      class="absolute right-0 flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm border border-green-100">
+      <span class="relative flex h-3 w-3">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+      </span>
+      <span class="text-sm font-medium text-gray-600">Live</span>
+    </div>
+  </div>
+
+  <div id="dashboard-container"
+    class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+    {% if dashboard %}
+    {% for module, variables in dashboard.items() %}
+    <div id="module-{{ module }}"
+      class="bg-white rounded-2xl shadow-lg p-6 fade-in hover:shadow-xl transition-shadow duration-300">
+      <h2 class="text-xl font-bold mb-4 capitalize text-gray-700 border-b pb-2">{{ module.replace("_", " ") }}</h2>
+      <div id="vars-{{ module }}" class="space-y-3">
+        {% for variable, value in variables.items() %}
+        <div id="var-{{ module }}-{{ variable }}"
+          class="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0">
+          <span class="text-gray-600 font-medium">{{ variable.replace("_", " ") }}</span>
+          <div class="text-right">
+            <div class="flex items-center justify-end gap-2">
+              <div class="value font-bold text-gray-900 text-lg">{{ value.valeur }}</div>
+              <button onclick="openChart('{{ module }}', '{{ variable }}')"
+                class="text-gray-400 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-50"
+                title="Voir l'historique">
+                📊
+              </button>
+            </div>
+            <div class="timestamp text-xs text-gray-400" data-time="{{ value.derniere_maj }}">🕒 {{
+              delay(value.derniere_maj) }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p id="no-data-msg" class="text-gray-500 col-span-full text-center py-10 text-lg">Aucune donnée reçue pour le
+      moment. En
+      attente de messages MQTT...</p>
+    {% endif %}
+  </div>
+
+  <!-- Charts Section -->
+  <div class="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Message Stats -->
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">📈 Messages par minute</h2>
+      <canvas id="messageStatsChart"></canvas>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">🔔 Derniers messages MQTT</h2>
+      <div id="messages-list" class="space-y-3 max-h-80 overflow-y-auto pr-2">
+        {% for message in messages %}
+        <div
+          class="flex justify-between items-center border-b border-gray-100 pb-2 fade-in hover:bg-gray-50 rounded px-2 transition-colors">
+          <span class="text-gray-600 font-medium">{{ message.topic }}</span>
+          <div class="text-right">
+            <div class="font-bold text-gray-900">{{ message.payload }}</div>
+            <div class="text-xs text-gray-400">🕒 {{ delay(message.timestamp) }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div id="chartModal"
+    class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-50 transition-opacity duration-300">
+    <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50 backdrop-blur-sm"></div>
+
+    <div
+      class="modal-container bg-white w-11/12 md:max-w-4xl mx-auto rounded-2xl shadow-2xl z-50 overflow-y-auto transform transition-all scale-95">
+      <div class="modal-content py-6 text-left px-8">
+        <div class="flex justify-between items-center pb-4 border-b">
+          <p class="text-2xl font-bold text-gray-800" id="modalTitle">Historique</p>
+          <div class="modal-close cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full transition-colors"
+            onclick="closeModal()">
+            <svg class="fill-current text-gray-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+              viewBox="0 0 18 18">
+              <path
+                d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z">
+              </path>
+            </svg>
+          </div>
+        </div>
+
+        <div class="my-6 h-96">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let messageStatsChartInstance = null;
+    let historyChartInstance = null;
+
+    // --- Utils ---
+    function timeSince(date) {
+      const seconds = Math.floor((new Date() - date) / 1000);
+      let interval = seconds / 31536000;
+      if (interval > 1) return Math.floor(interval) + " ans";
+      interval = seconds / 2592000;
+      if (interval > 1) return Math.floor(interval) + " mois";
+      interval = seconds / 604800;
+      if (interval > 1) return Math.floor(interval) + " semaines";
+      interval = seconds / 86400;
+      if (interval > 1) return Math.floor(interval) + " jours";
+      interval = seconds / 3600;
+      if (interval > 1) return Math.floor(interval) + " heures";
+      interval = seconds / 60;
+      if (interval > 1) return Math.floor(interval) + " minutes";
+      if (seconds < 10) return "quelques secondes";
+      return Math.floor(seconds) + " secondes";
+    }
+
+    function updateTimestamps() {
+      document.querySelectorAll('.timestamp').forEach(el => {
+        const isoTime = el.getAttribute('data-time');
+        if (isoTime) {
+          el.innerHTML = '🕒 il y a ' + timeSince(new Date(isoTime));
+        }
+      });
+    }
+    setInterval(updateTimestamps, 10000);
+
+    // --- Charts ---
+    function initMessageStatsChart() {
+      const ctx = document.getElementById('messageStatsChart').getContext('2d');
+      messageStatsChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Messages reçus',
+              data: [],
+              backgroundColor: 'rgba(75, 192, 192, 0.5)',
+              borderColor: 'rgba(75, 192, 192, 1)',
+              borderWidth: 1,
+              order: 2
+            },
+            {
+              label: 'Tendance',
+              data: [],
+              type: 'line',
+              borderColor: 'rgba(255, 99, 132, 1)',
+              borderWidth: 2,
+              tension: 0.4,
+              pointRadius: 0,
+              order: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+      updateMessageStats();
+    }
+
+    function updateMessageStats() {
+      fetch('/api/stats/messages')
+        .then(response => response.json())
+        .then(data => {
+          if (messageStatsChartInstance) {
+            const labels = data.map(d => d[0].split(' ')[1]);
+            const values = data.map(d => d[1]);
+
+            messageStatsChartInstance.data.labels = labels;
+            messageStatsChartInstance.data.datasets[0].data = values;
+            messageStatsChartInstance.data.datasets[1].data = values; // Simple trend line using same data but smoothed
+
+            messageStatsChartInstance.update();
+          }
+        });
+    }
+
+    // Refresh stats every minute
+    setInterval(updateMessageStats, 60000);
+
+    // --- Modal & History Chart ---
+    function openChart(module, variable) {
+      const modal = document.getElementById('chartModal');
+      document.getElementById('modalTitle').innerText = `${module} - ${variable}`;
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      document.body.classList.add('modal-active');
+
+      fetch(`/api/history/${module}/${variable}`)
+        .then(response => response.json())
+        .then(data => {
+          const ctx = document.getElementById('historyChart').getContext('2d');
+
+          if (historyChartInstance) {
+            historyChartInstance.destroy();
+          }
+
+          const labels = data.map(d => new Date(d[1]).toLocaleTimeString());
+          const values = data.map(d => {
+            const val = parseFloat(d[0]);
+            return isNaN(val) ? null : val;
+          });
+
+          historyChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [{
+                label: variable,
+                data: values,
+                borderColor: 'rgb(59, 130, 246)',
+                tension: 0.1,
+                fill: false
+              }]
+            },
+            options: {
+              responsive: true,
+              scales: {
+                x: { display: true },
+                y: { beginAtZero: false }
+              }
+            }
+          });
+        });
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('chartModal');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      document.body.classList.remove('modal-active');
+    }
+
+    document.querySelector('.modal-overlay').addEventListener('click', closeModal);
+
+    // --- Socket.IO ---
+    socket.on('update_data', function (data) {
+      const module = data.module;
+      const variable = data.variable;
+      const value = data.value;
+      const timestamp = data.timestamp;
+
+      // Remove "no data" message if exists
+      const noDataMsg = document.getElementById('no-data-msg');
+      if (noDataMsg) noDataMsg.remove();
+
+      // Check if module exists
+      let moduleDiv = document.getElementById(`module-${module}`);
+      if (!moduleDiv) {
+        const container = document.getElementById('dashboard-container');
+        moduleDiv = document.createElement('div');
+        moduleDiv.id = `module-${module}`;
+        moduleDiv.className = 'bg-white rounded-2xl shadow p-6 fade-in';
+        moduleDiv.innerHTML = `
+          <h2 class="text-xl font-semibold mb-4 capitalize">${module.replace(/_/g, " ")}</h2>
+          <div id="vars-${module}" class="space-y-2"></div>
+        `;
+        container.appendChild(moduleDiv);
+      }
+
+      // Check if variable exists
+      let varDiv = document.getElementById(`var-${module}-${variable}`);
+      if (!varDiv) {
+        const varsContainer = document.getElementById(`vars-${module}`);
+        varDiv = document.createElement('div');
+        varDiv.id = `var-${module}-${variable}`;
+        varDiv.className = 'flex justify-between items-center border-b border-gray-200 pb-1 highlight';
+        varDiv.innerHTML = `
+          <span class="text-gray-600">${variable.replace(/_/g, " ")}</span>
+          <div class="text-right">
+            <div class="flex items-center justify-end gap-2">
+              <div class="value font-bold text-gray-900"></div>
+              <button onclick="openChart('${module}', '${variable}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Voir l'historique">
+                📊
+              </button>
+            </div>
+            <div class="timestamp text-xs text-gray-500"></div>
+          </div>
+        `;
+        varsContainer.appendChild(varDiv);
+      } else {
+        varDiv.classList.remove('highlight');
+        void varDiv.offsetWidth; // trigger reflow
+        varDiv.classList.add('highlight');
+      }
+
+      // Update values
+      varDiv.querySelector('.value').textContent = value;
+      const timeEl = varDiv.querySelector('.timestamp');
+      timeEl.setAttribute('data-time', timestamp);
+      timeEl.innerHTML = '🕒 il y a ' + timeSince(new Date(timestamp));
+
+      // Update stats chart slightly delayed to catch the new count
+      setTimeout(updateMessageStats, 1000);
+    });
+
+    socket.on('delete_data', function (data) {
+      const varDiv = document.getElementById(`var-${data.module}-${data.variable}`);
+      if (varDiv) varDiv.remove();
+
+      const varsContainer = document.getElementById(`vars-${data.module}`);
+      if (varsContainer && varsContainer.children.length === 0) {
+        const moduleDiv = document.getElementById(`module-${data.module}`);
+        if (moduleDiv) moduleDiv.remove();
+      }
+    });
+
+    socket.on('new_message', function (msg) {
+      const list = document.getElementById('messages-list');
+      const div = document.createElement('div');
+      div.className = 'flex justify-between border-b border-gray-200 pb-1 fade-in';
+      div.innerHTML = `
+        <span class="text-gray-600">${msg.topic}</span>
+        <div class="text-right">
+          <div class="font-bold text-gray-900">${msg.payload}</div>
+          <div class="text-xs text-gray-500">🕒 il y a quelques secondes</div>
+        </div>
+      `;
+      list.prepend(div);
+      if (list.children.length > 20) {
+        list.lastElementChild.remove();
+      }
+    });
+
+    // Init
+    initMessageStatsChart();
+  </script>
+</body>
+
+</html>
