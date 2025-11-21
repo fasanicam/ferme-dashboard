@@ -18,6 +18,12 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS message_stats
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   timestamp DATETIME)''')
+    
+    # Table for module publication tracking (hourly)
+    c.execute('''CREATE TABLE IF NOT EXISTS module_publications
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  module TEXT,
+                  timestamp DATETIME)''')
     conn.commit()
     conn.close()
 
@@ -58,3 +64,26 @@ def get_message_stats(limit=60):
     data = c.fetchall()
     conn.close()
     return data[::-1]
+
+def log_module_publication(module):
+    """Log a publication for a specific module."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO module_publications (module, timestamp) VALUES (?, ?)", (module, datetime.now()))
+    conn.commit()
+    conn.close()
+
+def get_module_publication_trends(hours=24):
+    """Returns publication count per hour per module for the last 'hours' hours."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    # Group by hour and module
+    c.execute('''SELECT module, strftime('%Y-%m-%d %H:00', timestamp) as hour, COUNT(*) 
+                 FROM module_publications 
+                 WHERE timestamp >= datetime('now', '-' || ? || ' hours')
+                 GROUP BY module, hour 
+                 ORDER BY hour ASC''', (hours,))
+    data = c.fetchall()
+    conn.close()
+    return data
+

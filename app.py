@@ -62,12 +62,39 @@ def get_message_stats():
 
 @app.route("/api/stats/publications")
 def get_publication_stats():
-    """Get publication count per module for monitoring"""
-    from mqtt_client import module_message_count
-    data = [{"module": module, "count": count} for module, count in module_message_count.items()]
-    # Sort by count descending to show most active modules first
-    data.sort(key=lambda x: x['count'], reverse=True)
+    """Get publication trends per hour per module"""
+    data = database.get_module_publication_trends(hours=12)
     return jsonify(data)
+
+@app.route("/api/stats/rate-limit")
+def get_rate_limit_status():
+    """Get current rate limit status for each module"""
+    from mqtt_client import last_save_time, RATE_LIMIT_SECONDS
+    from datetime import datetime
+    
+    status = []
+    for key, last_time in last_save_time.items():
+        module, variable = key.split(':', 1)
+        time_since = (datetime.now() - last_time).total_seconds()
+        is_limited = time_since < RATE_LIMIT_SECONDS
+        
+        status.append({
+            "module": module,
+            "variable": variable,
+            "last_save": last_time.isoformat(),
+            "seconds_since": round(time_since, 1),
+            "is_limited": is_limited
+        })
+    
+    # Group by module
+    grouped = {}
+    for item in status:
+        mod = item['module']
+        if mod not in grouped:
+            grouped[mod] = []
+        grouped[mod].append(item)
+    
+    return jsonify(grouped)
 
 if __name__ == "__main__":
     socketio.run(app, debug=True, host="0.0.0.0")

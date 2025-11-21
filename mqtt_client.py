@@ -74,8 +74,11 @@ def on_message(client, userdata, msg):
 
         module, variable = parts[3], parts[4]
         
-        # Track publication count per module
+        # Track publication count per module (in-memory counter)
         module_message_count[module] += 1
+        
+        # Log to database for trend tracking
+        database.log_module_publication(module)
         
         # Si le payload est vide, supprimer la variable
         if not payload:

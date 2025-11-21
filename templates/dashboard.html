@@ -140,17 +140,28 @@
   </div>
 
   <!-- Charts Section -->
-  <div class="mt-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
+  <div class="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
     <!-- Message Stats -->
     <div class="bg-white rounded-2xl shadow-lg p-6">
-      <h2 class="text-xl font-bold mb-4 text-gray-800">📈 Messages par minute</h2>
+      <h2 class="text-xl font-bold mb-4 text-gray-800">📈 Activité globale (tous projets)</h2>
       <canvas id="messageStatsChart"></canvas>
     </div>
 
-    <!-- Publication Rate Monitoring -->
+    <!-- Publication Trends -->
     <div class="bg-white rounded-2xl shadow-lg p-6">
-      <h2 class="text-xl font-bold mb-4 text-gray-800">⚠️ Publications par module</h2>
+      <h2 class="text-xl font-bold mb-4 text-gray-800">📊 Publications par heure (12h)</h2>
       <canvas id="publicationStatsChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Rate Limit Status & Recent Activity -->
+  <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Rate Limit Status -->
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">⏱️ Statut Rate Limit</h2>
+      <div id="rate-limit-status" class="space-y-2 max-h-80 overflow-y-auto pr-2">
+        <p class="text-gray-500 text-sm">Chargement...</p>
+      </div>
     </div>
 
     <!-- Recent Activity -->
@@ -467,33 +478,34 @@
         });
     }
 
-    // --- Publication Stats Chart ---
+    // --- Publication Stats Chart (Trend Lines) ---
+    const moduleColors = [
+      { border: 'rgba(59, 130, 246, 0.9)', bg: 'rgba(59, 130, 246, 0.1)' },  // Blue
+      { border: 'rgba(239, 68, 68, 0.9)', bg: 'rgba(239, 68, 68, 0.1)' },    // Red
+      { border: 'rgba(34, 197, 94, 0.9)', bg: 'rgba(34, 197, 94, 0.1)' },    // Green
+      { border: 'rgba(251, 146, 60, 0.9)', bg: 'rgba(251, 146, 60, 0.1)' },  // Orange
+      { border: 'rgba(168, 85, 247, 0.9)', bg: 'rgba(168, 85, 247, 0.1)' },  // Purple
+      { border: 'rgba(236, 72, 153, 0.9)', bg: 'rgba(236, 72, 153, 0.1)' },  // Pink
+    ];
+
     function initPublicationStatsChart() {
       const ctx = document.getElementById('publicationStatsChart').getContext('2d');
 
-      // Create gradient
-      const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-      gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
-      gradient.addColorStop(1, 'rgba(239, 68, 68, 0.01)');
-
       publicationStatsChartInstance = new Chart(ctx, {
-        type: 'bar',
+        type: 'line',
         data: {
           labels: [],
-          datasets: [{
-            label: 'Nombre de publications',
-            data: [],
-            backgroundColor: gradient,
-            borderColor: 'rgba(239, 68, 68, 0.9)',
-            borderWidth: 2,
-            borderRadius: 4
-          }]
+          datasets: []
         },
         options: {
           responsive: true,
           animation: {
             duration: 750,
             easing: 'easeInOutQuart'
+          },
+          interaction: {
+            mode: 'index',
+            intersect: false,
           },
           scales: {
             y: {
@@ -503,7 +515,7 @@
               },
               title: {
                 display: true,
-                text: 'Nombre de messages',
+                text: 'Messages / heure',
                 color: 'rgb(75, 85, 99)'
               }
             },
@@ -515,12 +527,20 @@
           },
           plugins: {
             legend: {
-              display: false
+              display: true,
+              position: 'top',
+              labels: {
+                color: 'rgb(75, 85, 99)',
+                font: {
+                  size: 11
+                },
+                usePointStyle: true
+              }
             },
             tooltip: {
               callbacks: {
                 label: function (context) {
-                  return `${context.parsed.y} publications`;
+                  return `${context.dataset.label}: ${context.parsed.y} msg / h`;
                 }
               }
             }
@@ -534,30 +554,97 @@
       fetch('/api/stats/publications')
         .then(response => response.json())
         .then(data => {
-          if (publicationStatsChartInstance) {
-            const labels = data.map(d => d.module);
-            const values = data.map(d => d.count);
+          if (publicationStatsChartInstance && data.length > 0) {
+            // data format: [[module, hour, count], ...]
+            // Group by module and hour
+            const moduleData = {};
+            const allHours = new Set();
+
+            data.forEach(([module, hour, count]) => {
+              if (!moduleData[module]) {
+                moduleData[module] = {};
+              }
+              moduleData[module][hour] = count;
+              allHours.add(hour);
+            });
+
+            // Sort hours
+            const sortedHours = Array.from(allHours).sort();
+
+            // Create datasets for each module
+            const datasets = Object.keys(moduleData).map((module, index) => {
+              const colorIndex = index % moduleColors.length;
+              const values = sortedHours.map(hour => moduleData[module][hour] || 0);
+
+              return {
+                label: module,
+                data: values,
+                borderColor: moduleColors[colorIndex].border,
+                backgroundColor: moduleColors[colorIndex].bg,
+                borderWidth: 2,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: moduleColors[colorIndex].border,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 1,
+                pointHoverRadius: 5,
+                fill: false
+              };
+            });
+
+            // Format hour labels (show only HH:00)
+            const labels = sortedHours.map(h => h.split(' ')[1] || h.split('T')[1] || h);
 
             publicationStatsChartInstance.data.labels = labels;
-            publicationStatsChartInstance.data.datasets[0].data = values;
-
+            publicationStatsChartInstance.data.datasets = datasets;
             publicationStatsChartInstance.update();
           }
+        });
+    }
+
+    // --- Rate Limit Status ---
+    function updateRateLimitStatus() {
+      fetch('/api/stats/rate-limit')
+        .then(response => response.json())
+        .then(data => {
+          const container = document.getElementById('rate-limit-status');
+          if (Object.keys(data).length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">Aucune donnée disponible</p>';
+            return;
+          }
+
+          let html = '';
+          for (const [module, variables] of Object.entries(data)) {
+            const limitedCount = variables.filter(v => v.is_limited).length;
+            const totalCount = variables.length;
+            const statusColor = limitedCount > 0 ? 'text-orange-600' : 'text-green-600';
+            const statusIcon = limitedCount > 0 ? '⏳' : '✅';
+
+            html += `
+              < div class="border-b border-gray-100 pb-2 last:border-0" >
+                <div class="flex justify-between items-center">
+                  <span class="font-medium text-gray-700">${module}</span>
+                  <span class="${statusColor} text-sm font-semibold">${statusIcon} ${limitedCount}/${totalCount} limité(s)</span>
+                </div>
+              </div >
+              `;
+          }
+          container.innerHTML = html;
         });
     }
 
     // Refresh stats every minute
     setInterval(updateMessageStats, 60000);
     setInterval(updatePublicationStats, 60000);
+    setInterval(updateRateLimitStatus, 5000); // Update rate limit more frequently
 
     // --- Modal & History Chart ---
     function openChart(module, variable) {
       const modal = document.getElementById('chartModal');
-      document.getElementById('modalTitle').innerText = `${module} - ${variable}`;
-      modal.classList.remove('opacity-0', 'pointer-events-none');
+      document.getElementById('modalTitle').innerText = `${module} - ${variable} `;
       document.body.classList.add('modal-active');
 
-      fetch(`/api/history/${module}/${variable}`)
+      fetch(`/ api / history / ${module}/${variable}`)
         .then(response => response.json())
         .then(data => {
           const ctx = document.getElementById('historyChart').getContext('2d');
@@ -704,6 +791,7 @@
     // Init
     initMessageStatsChart();
     initPublicationStatsChart();
+    updateRateLimitStatus(); // Initial load
     initAllSparklines();
   </script>
 </body>
