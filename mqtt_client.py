@@ -3,9 +3,10 @@ from datetime import datetime, timedelta
 import paho.mqtt.client as mqtt  # type: ignore
 from collections import deque, defaultdict
 import time
+import eventlet
 
 dashboard_data = {}
-last_messages = deque(maxlen=10)  # Stocke les 10 derniers messages
+last_messages = deque(maxlen=100)  # Stocke les 100 derniers messages
 
 # Rate limiting: track last message time per module/variable
 last_save_time = defaultdict(lambda: datetime.min)
@@ -28,6 +29,9 @@ logging.basicConfig(
     ]
 )
 
+# Global socketio instance
+_socketio = None
+
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         logging.info("✅ Connecté au broker MQTT: mqtt.dev.icam.school")
@@ -49,6 +53,7 @@ def on_disconnect(client, userdata, rc):
             logging.error("Erreur lors de la reconnexion : %s", e)
 
 def on_message(client, userdata, msg):
+    global _socketio
     try:
         topic = msg.topic
         payload = msg.payload.decode()
@@ -57,7 +62,7 @@ def on_message(client, userdata, msg):
         # Log message receipt for stats
         database.log_message_receipt()
         
-        timestamp = datetime.now().isoformat(timespec='seconds')
+        timestamp = datetime.now().isoformat(timespec='seconds') + 'Z'
         
         # Ajouter le message à la liste des derniers messages
         message_data = {
@@ -67,9 +72,13 @@ def on_message(client, userdata, msg):
         }
         last_messages.appendleft(message_data)
 
-        # Emit new message event
-        if hasattr(client, 'socketio'):
-            client.socketio.emit('new_message', message_data)
+        # Emit new message event to all clients
+        if _socketio:
+            _socketio.emit('new_message', message_data, namespace='/')
+            eventlet.sleep(0)  # Yield to eventlet to process the emit
+            logging.info("✉️ Event 'new_message' emitted to all clients for topic: %s", topic)
+        else:
+            logging.warning("⚠️ SocketIO not initialized!")
         
         # Parse topic: bzh/mecatro/dashboard/<project>/<variable>
         parts = topic.split('/')
@@ -93,9 +102,9 @@ def on_message(client, userdata, msg):
                 # Si le module n'a plus de variables, le supprimer aussi
                 if not dashboard_data[module]:
                     del dashboard_data[module]
-                # Emit deletion event
-                if hasattr(client, 'socketio'):
-                    client.socketio.emit('delete_data', {'module': module, 'variable': variable})
+                # Emit deletion event to all clients
+                if _socketio:
+                    _socketio.emit('delete_data', {'module': module, 'variable': variable}, namespace='/')
             return
 
         # Ajouter/mettre à jour la variable avec un payload non vide
@@ -127,27 +136,32 @@ def on_message(client, userdata, msg):
         else:
             logging.debug(f"Skipped DB save for {key} (rate limited or duplicate)")
         
-        # Emit update event (always update UI, even if not saving to DB)
-        if hasattr(client, 'socketio'):
-            client.socketio.emit('update_data', {
+        # Emit update event to all clients (always update UI, even if not saving to DB)
+        if _socketio:
+            _socketio.emit('update_data', {
                 'module': module, 
                 'variable': variable, 
                 'value': payload,
                 'timestamp': timestamp
-            })
+            }, namespace='/')
+            eventlet.sleep(0)  # Yield to eventlet to process the emit
+            logging.info("📡 Event 'update_data' emitted to all clients: %s/%s = %s", module, variable, payload)
+        else:
+            logging.warning("⚠️ SocketIO not initialized!")
     except Exception as e:
         logging.error("Erreur lors du traitement du message MQTT : %s", e)
 
 def init_mqtt(socketio=None):
+    global _socketio
+    _socketio = socketio
+    
     client = mqtt.Client()
-    if socketio:
-        client.socketio = socketio
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
     client.on_message = on_message
     # client.username_pw_set('admin', 'admin@icam')
     try:
-        client.connect("mqtt.dev.icam.school", 1883, 60)
+        client.connect("global_mqtt", 1883, 60)
         client.loop_start()
         logging.info("🚀 Client MQTT démarré et connecté à mqtt.dev.icam.school")
     except Exception as e:

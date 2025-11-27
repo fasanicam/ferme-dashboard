@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Socket.IO Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        #log {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 400px;
+            overflow-y: scroll;
+            background: #f5f5f5;
+        }
+
+        .event {
+            margin: 5px 0;
+            padding: 5px;
+            background: white;
+            border-left: 3px solid #4CAF50;
+        }
+
+        .error {
+            border-left-color: #f44336;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🧪 Socket.IO Connection Test</h1>
+    <p>Connection Status: <strong id="status">Connecting...</strong></p>
+    <p>Transport: <strong id="transport">-</strong></p>
+    <p>Socket ID: <strong id="socketId">-</strong></p>
+
+    <button onclick="testEmit()">📤 Test Emit</button>
+    <button onclick="clearLog()">🗑️ Clear Log</button>
+
+    <h2>Event Log:</h2>
+    <div id="log"></div>
+
+    <script>
+        const socket = io(window.location.origin, {
+            transports: ['websocket', 'polling'],
+            reconnection: true
+        });
+
+        function addLog(message, isError = false) {
+            const log = document.getElementById('log');
+            const div = document.createElement('div');
+            div.className = 'event' + (isError ? ' error' : '');
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function testEmit() {
+            socket.emit('test_event', { message: 'Hello from client!' });
+            addLog('📤 Sent test_event to server');
+        }
+
+        socket.on('connect', () => {
+            document.getElementById('status').textContent = 'Connected ✅';
+            document.getElementById('status').style.color = 'green';
+            document.getElementById('transport').textContent = socket.io.engine.transport.name;
+            document.getElementById('socketId').textContent = socket.id;
+            addLog('✅ Connected with transport: ' + socket.io.engine.transport.name);
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('status').textContent = 'Disconnected ❌';
+            document.getElementById('status').style.color = 'red';
+            addLog('❌ Disconnected', true);
+        });
+
+        socket.on('connect_error', (error) => {
+            addLog('⚠️ Connection error: ' + error.message, true);
+        });
+
+        socket.on('update_data', (data) => {
+            addLog('📥 Received update_data: ' + JSON.stringify(data));
+        });
+
+        socket.on('new_message', (data) => {
+            addLog('📥 Received new_message: ' + JSON.stringify(data));
+        });
+
+        // Log all events
+        socket.onAny((eventName, ...args) => {
+            if (!['connect', 'disconnect'].includes(eventName)) {
+                addLog('📥 Event "' + eventName + '": ' + JSON.stringify(args));
+            }
+        });
+
+        socket.io.engine.on('upgrade', (transport) => {
+            document.getElementById('transport').textContent = transport.name;
+            addLog('⬆️ Transport upgraded to: ' + transport.name);
+        });
+    </script>
+</body>
+
+</html>

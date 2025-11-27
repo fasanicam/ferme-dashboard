@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Dashboard Ferme connectée</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="icon"
@@ -27,7 +27,7 @@
     }
 
     .highlight {
-      animation: highlight 1s ease-out;
+      animation: highlight 3s ease-out;
     }
 
     @keyframes highlight {
@@ -275,7 +275,59 @@
   </div>
 
   <script>
-    const socket = io();
+    const socket = io(window.location.origin, {
+      transports: ['websocket', 'polling'],  // Try WebSocket first, fallback to polling
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: Infinity,
+      timeout: 20000,           // Increase connection timeout
+      pingTimeout: 60000,       // Increase ping timeout to prevent session expiry
+      pingInterval: 25000       // Send ping every 25s to keep alive
+    });
+
+    // Connection status monitoring
+    socket.on('connect', () => {
+      console.log('[Socket.IO] ✅ Connected (polling) - ID:', socket.id);
+      updateConnectionStatus(true);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('[Socket.IO] ❌ Disconnected - Reason:', reason);
+      updateConnectionStatus(false);
+      if (reason === 'io server disconnect') {
+        // Server disconnected, reconnect manually
+        socket.connect();
+      }
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('[Socket.IO] ⚠️ Connection Error:', error.message);
+      updateConnectionStatus(false);
+    });
+
+    socket.on('reconnect_attempt', (attemptNumber) => {
+      console.log('[Socket.IO] 🔄 Reconnection attempt:', attemptNumber);
+    });
+
+    socket.on('reconnect', (attemptNumber) => {
+      console.log('[Socket.IO] ✅ Reconnected after', attemptNumber, 'attempts');
+      updateConnectionStatus(true);
+    });
+
+    function updateConnectionStatus(connected) {
+      const statusIndicator = document.querySelector('.relative.flex.h-3.w-3');
+      if (statusIndicator && statusIndicator.parentElement) {
+        if (connected) {
+          statusIndicator.querySelector('.bg-green-500').style.backgroundColor = '#22c55e'; // green
+          statusIndicator.parentElement.querySelector('span.text-sm').textContent = 'Live';
+        } else {
+          statusIndicator.querySelector('.bg-green-500').style.backgroundColor = '#ef4444'; // red
+          statusIndicator.parentElement.querySelector('span.text-sm').textContent = 'Déconnecté';
+        }
+      }
+    }
+
     let messageStatsChartInstance = null;
     let publicationStatsChartInstance = null;
     let historyChartInstance = null;
@@ -285,17 +337,23 @@
       const date = new Date(timestamp);
       const seconds = Math.floor((new Date() - date) / 1000);
       let interval = seconds / 31536000;
-      if (interval > 1) return Math.floor(interval) + " ans";
+      if (interval >= 2) return Math.floor(interval) + " ans";
+      if (interval >= 1) return "1 an";
       interval = seconds / 2592000;
-      if (interval > 1) return Math.floor(interval) + " mois";
+      if (interval >= 2) return Math.floor(interval) + " mois";
+      if (interval >= 1) return "1 mois";
       interval = seconds / 604800;
-      if (interval > 1) return Math.floor(interval) + " semaines";
+      if (interval >= 2) return Math.floor(interval) + " semaines";
+      if (interval >= 1) return "1 semaine";
       interval = seconds / 86400;
-      if (interval > 1) return Math.floor(interval) + " jours";
+      if (interval >= 2) return Math.floor(interval) + " jours";
+      if (interval >= 1) return "1 jour";
       interval = seconds / 3600;
-      if (interval > 1) return Math.floor(interval) + " heures";
+      if (interval >= 2) return Math.floor(interval) + " heures";
+      if (interval >= 1) return "1 heure";
       interval = seconds / 60;
-      if (interval > 1) return Math.floor(interval) + " minutes";
+      if (interval >= 2) return Math.floor(interval) + " minutes";
+      if (interval >= 1) return "1 minute";
       if (seconds < 10) return "quelques secondes";
       return Math.floor(seconds) + " secondes";
     }
@@ -382,6 +440,9 @@
           if (container && container.children.length === 0) {
             container.innerHTML = '<div id="no-data-msg" class="col-span-full text-center text-gray-500 py-12">Aucune donnée disponible. En attente de messages MQTT...</div>';
           }
+
+          // Update publication stats chart to remove the deleted module's line
+          updatePublicationStats();
         }, 300);
       }
     }
@@ -641,11 +702,14 @@
             const allHours = new Set();
 
             data.forEach(([module, hour, count]) => {
-              if (!moduleData[module]) {
-                moduleData[module] = {};
+              // Only include modules that are currently visible on the dashboard
+              if (document.getElementById(`module-${module}`)) {
+                if (!moduleData[module]) {
+                  moduleData[module] = {};
+                }
+                moduleData[module][hour] = count;
+                allHours.add(hour);
               }
-              moduleData[module][hour] = count;
-              allHours.add(hour);
             });
 
             // Sort hours
@@ -741,10 +805,16 @@
     // --- Modal & History Chart ---
     function openChart(module, variable) {
       const modal = document.getElementById('chartModal');
+
+      // Show the modal
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      modal.querySelector('.modal-container').classList.remove('scale-95');
+      modal.querySelector('.modal-container').classList.add('scale-100');
+
       document.getElementById('modalTitle').innerText = `${module} - ${variable} `;
       document.body.classList.add('modal-active');
 
-      fetch(`/ api / history / ${module}/${variable}`)
+      fetch(`/api/history/${module}/${variable}`)
         .then(response => response.json())
         .then(data => {
           const ctx = document.getElementById('historyChart').getContext('2d');
@@ -785,13 +855,42 @@
     function closeModal() {
       const modal = document.getElementById('chartModal');
       modal.classList.add('opacity-0', 'pointer-events-none');
+      modal.querySelector('.modal-container').classList.remove('scale-100');
+      modal.querySelector('.modal-container').classList.add('scale-95');
       document.body.classList.remove('modal-active');
     }
 
     document.querySelector('.modal-overlay').addEventListener('click', closeModal);
 
     // --- Socket.IO ---
+    socket.on('new_message', function (message) {
+      console.log('[Socket.IO] 📥 Received new_message:', message);
+      const messagesList = document.getElementById('messages-list');
+      if (!messagesList) return;
+
+      // Create new message element
+      const div = document.createElement('div');
+      div.className = 'flex justify-between items-center border-b border-gray-100 pb-2 fade-in hover:bg-gray-50 rounded px-2 transition-colors';
+      div.innerHTML = `
+          <span class="text-gray-600 font-medium">${message.topic}</span>
+          <div class="text-right">
+            <div class="font-bold text-gray-900">${message.payload}</div>
+            <div class="text-xs text-gray-400">🕒 ${timeSince(message.timestamp)}</div>
+          </div>
+        `;
+
+      // Add to top of list
+      messagesList.prepend(div);
+
+      // Limit to 10 messages
+      if (messagesList.children.length > 10) {
+        messagesList.lastElementChild.remove();
+      }
+    });
+
+
     socket.on('update_data', function (data) {
+      console.log('[Socket.IO] 📥 Received update_data:', data);
       const module = data.module;
       const variable = data.variable;
       const value = data.value;
@@ -856,8 +955,10 @@
       // Update sparkline if it exists
       updateSparkline(module, variable);
 
-      // Update stats chart slightly delayed to catch the new count
+      // Update stats charts slightly delayed to catch the new count
       setTimeout(updateMessageStats, 1000);
+      setTimeout(updatePublicationStats, 1500);
+      setTimeout(updateRateLimitStatus, 500);
     });
 
     socket.on('delete_data', function (data) {
@@ -871,28 +972,179 @@
       }
     });
 
-    socket.on('new_message', function (msg) {
-      const list = document.getElementById('messages-list');
-      const div = document.createElement('div');
-      div.className = 'flex justify-between border-b border-gray-200 pb-1 fade-in';
-      div.innerHTML = `
-        <span class="text-gray-600">${msg.topic}</span>
-        <div class="text-right">
-          <div class="font-bold text-gray-900">${msg.payload}</div>
-          <div class="text-xs text-gray-500">🕒 il y a quelques secondes</div>
-        </div>
-      `;
-      list.prepend(div);
-      if (list.children.length > 100) {
-        list.lastElementChild.remove();
-      }
-    });
-
     // Init
     initMessageStatsChart();
     initPublicationStatsChart();
     updateRateLimitStatus(); // Initial load
     initAllSparklines();
+
+    // HTTP Polling fallback (since Socket.IO doesn't work through Traefik)
+    let lastDashboardData = JSON.stringify({{ dashboard | tojson | safe }});
+
+    function pollDashboardUpdates() {
+      fetch('/api/dashboard/data')
+        .then(response => response.json())
+        .then(data => {
+          const newDataStr = JSON.stringify(data.dashboard);
+          if (newDataStr !== lastDashboardData) {
+            lastDashboardData = newDataStr;
+            updateDashboardFromData(data.dashboard);
+          }
+        })
+        .catch(err => console.log('Poll error:', err));
+    }
+
+    function updateDashboardFromData(dashboardData) {
+      // Remove "no data" message if it exists
+      const noDataMsg = document.getElementById('no-data-msg');
+      if (noDataMsg) noDataMsg.remove();
+
+      for (const [module, variables] of Object.entries(dashboardData)) {
+        // Check if module card exists, create if not
+        let moduleDiv = document.getElementById(`module-${module}`);
+        if (!moduleDiv) {
+          const container = document.getElementById('dashboard-container');
+          moduleDiv = document.createElement('div');
+          moduleDiv.id = `module-${module}`;
+          moduleDiv.className = 'bg-white rounded-2xl shadow-lg p-6 fade-in hover:shadow-xl transition-shadow duration-300 group';
+          moduleDiv.innerHTML = `
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+              <h2 class="text-xl font-bold capitalize text-gray-700">${module.replace(/_/g, " ")}</h2>
+              <button onclick="deleteModule('${module}')"
+                class="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full p-2"
+                title="Supprimer ce module">
+                🗑️
+              </button>
+            </div>
+            <div id="vars-${module}" class="space-y-3 max-h-96 overflow-y-auto pr-2"
+              style="scrollbar-width: thin; scrollbar-color: rgba(59, 130, 246, 0.3) transparent;"></div>
+          `;
+          container.appendChild(moduleDiv);
+        }
+
+        for (const [variable, valueData] of Object.entries(variables)) {
+          let varDiv = document.getElementById(`var-${module}-${variable}`);
+
+          // If variable card doesn't exist, create it
+          if (!varDiv) {
+            const varsContainer = document.getElementById(`vars-${module}`);
+            varDiv = document.createElement('div');
+            varDiv.id = `var-${module}-${variable}`;
+            varDiv.className = 'border-b border-gray-100 pb-3 last:border-0 group/var';
+            varDiv.innerHTML = `
+              <div class="flex justify-between items-start mb-2">
+                <span class="text-gray-600 font-medium">${variable.replace(/_/g, " ")}</span>
+                <div class="text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="value font-bold text-gray-900 text-lg">${valueData.valeur}</div>
+                    <button onclick="openChart('${module}', '${variable}')"
+                      class="text-gray-400 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-50"
+                      title="Voir l'historique">
+                      📊
+                    </button>
+                    <button onclick="deleteVariable('${module}', '${variable}')"
+                      class="opacity-0 group-hover/var:opacity-100 transition-opacity text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full p-1"
+                      title="Supprimer cette variable">
+                      ❌
+                    </button>
+                  </div>
+                  <div class="timestamp text-xs text-gray-400" data-time="${valueData.derniere_maj}">🕒 il y a ${timeSince(new Date(valueData.derniere_maj))}</div>
+                </div>
+              </div>
+              <canvas id="sparkline-${module}-${variable}" class="w-full h-12" style="max-height: 48px;"></canvas>
+            `;
+            varsContainer.appendChild(varDiv);
+
+            // Create sparkline for new variable
+            createSparkline(module, variable);
+          } else {
+            // Update existing card
+            varDiv.querySelector('.value').textContent = valueData.valeur;
+            const timeEl = varDiv.querySelector('.timestamp');
+            timeEl.setAttribute('data-time', valueData.derniere_maj);
+            timeEl.innerHTML = '🕒 il y a ' + timeSince(new Date(valueData.derniere_maj));
+
+            // Highlight animation
+            varDiv.classList.remove('highlight');
+            void varDiv.offsetWidth;
+            varDiv.classList.add('highlight');
+
+            // Update sparkline
+            updateSparkline(module, variable);
+          }
+        }
+      }
+    }
+
+    // Track last messages to detect new ones
+    let lastMessages = [];
+
+    // Poll for new messages
+    function pollMessages() {
+      fetch('/api/dashboard/messages')
+        .then(response => response.json())
+        .then(data => {
+          const messagesList = document.getElementById('messages-list');
+          if (!messagesList) return;
+
+          // Detect new messages by comparing timestamps
+          const newMessages = data.messages.filter(msg =>
+            !lastMessages.some(oldMsg =>
+              oldMsg.topic === msg.topic &&
+              oldMsg.timestamp === msg.timestamp &&
+              oldMsg.payload === msg.payload
+            )
+          );
+
+          // Update lastMessages
+          lastMessages = data.messages;
+
+          // If we have new messages, add them with highlight
+          if (newMessages.length > 0) {
+            // Clear and rebuild, but only highlight new ones
+            messagesList.innerHTML = '';
+            data.messages.forEach(message => {
+              const div = document.createElement('div');
+              const isNew = newMessages.some(newMsg =>
+                newMsg.topic === message.topic &&
+                newMsg.timestamp === message.timestamp &&
+                newMsg.payload === message.payload
+              );
+
+              div.className = 'flex justify-between items-center border-b border-gray-100 pb-2 hover:bg-gray-50 rounded px-2 transition-colors';
+              if (isNew) {
+                div.classList.add('highlight'); // Add highlight animation for new messages
+              }
+
+              div.innerHTML = `
+                <span class="text-gray-600 font-medium">${message.topic}</span>
+                <div class="text-right">
+                  <div class="font-bold text-gray-900">${message.payload}</div>
+                  <div class="text-xs text-gray-400">🕒 ${timeSince(new Date(message.timestamp))}</div>
+                </div>
+              `;
+              messagesList.appendChild(div);
+            });
+          } else {
+            // Just update timestamps without rebuilding
+            const existingDivs = messagesList.querySelectorAll('.flex');
+            existingDivs.forEach((div, index) => {
+              if (data.messages[index]) {
+                const timestampEl = div.querySelector('.text-xs.text-gray-400');
+                if (timestampEl) {
+                  timestampEl.innerHTML = `🕒 ${timeSince(new Date(data.messages[index].timestamp))}`;
+                }
+              }
+            });
+          }
+        })
+        .catch(err => console.log('Messages poll error:', err));
+    }
+
+    // Poll every 2 seconds
+    setInterval(pollDashboardUpdates, 2000);
+    setInterval(pollMessages, 2000);
+    console.log('✅ HTTP polling enabled (every 2s)');
   </script>
 </body>
 

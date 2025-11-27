@@ -1,6 +1,7 @@
 # app.py
 from flask import Flask, render_template, jsonify, session, redirect, url_for, request # type: ignore
 from flask_socketio import SocketIO # type: ignore
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
 from mqtt_client import init_mqtt, dashboard_data, last_messages
 import eventlet
@@ -8,8 +9,10 @@ import database
 import os
 
 app = Flask(__name__)
+# Handle proxy headers from Traefik
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-socketio = SocketIO(app, async_mode='eventlet')
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 # Admin password
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'jesuisdavid')
@@ -20,12 +23,15 @@ database.init_db()
 # Initialize MQTT with SocketIO instance
 mqtt_client = init_mqtt(socketio)
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 def delay_humain(timestamp_iso):
     try:
+        # Handle 'Z' suffix for UTC timestamps (not supported by fromisoformat before Python 3.11)
+        if timestamp_iso.endswith('Z'):
+            timestamp_iso = timestamp_iso[:-1] + '+00:00'
         dt = datetime.fromisoformat(timestamp_iso)
-        delta = datetime.now() - dt
+        delta = datetime.now(timezone.utc) - dt
         secondes = int(delta.total_seconds())
         minutes = secondes // 60
         heures = minutes // 60
@@ -38,13 +44,13 @@ def delay_humain(timestamp_iso):
         elif secondes < 60:
             return f"il y a {secondes} secondes"
         elif minutes < 60:
-            return f"il y a {minutes} minutes"
+            return "il y a 1 minute" if minutes == 1 else f"il y a {minutes} minutes"
         elif heures < 24:
-            return f"il y a {heures} heures"
+            return "il y a 1 heure" if heures == 1 else f"il y a {heures} heures"
         elif jours < 7:
-            return f"il y a {jours} jours"
+            return "il y a 1 jour" if jours == 1 else f"il y a {jours} jours"
         elif semaines < 5:
-            return f"il y a {semaines} semaines"
+            return "il y a 1 semaine" if semaines == 1 else f"il y a {semaines} semaines"
         else:
             return f"il y a {mois} mois"
     except Exception as e:
@@ -54,6 +60,28 @@ def delay_humain(timestamp_iso):
 @app.route("/")
 def dashboard():
     return render_template("dashboard.html", dashboard=dashboard_data, delay=delay_humain, messages=last_messages)
+
+@app.route("/socketio-test")
+def socketio_test():
+    """Test page for Socket.IO connection and events"""
+    return render_template("socketio_test.html")
+
+@app.route("/api/dashboard/data")
+def get_dashboard_data():
+    """Get current dashboard data for polling"""
+    return jsonify({
+        "dashboard": dashboard_data,
+        "timestamp": datetime.now().isoformat()
+    })
+
+@app.route("/api/dashboard/messages")
+def get_dashboard_messages():
+    """Get recent MQTT messages for polling"""
+    return jsonify({
+        "messages": list(last_messages)[:10],  # Last 10 messages
+        "timestamp": datetime.now().isoformat()
+    })
+
 
 @app.route("/api/history/<module>/<variable>")
 def get_history(module, variable):
