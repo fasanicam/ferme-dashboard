@@ -41,11 +41,12 @@
         {% if modules %}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for module, variables in modules.items() %}
-            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow" id="module-{{ module }}">
+            <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow module-card"
+                data-module="{{ module | tojson }}">
                 <div class="flex justify-between items-start mb-4">
                     <h2 class="text-xl font-bold text-gray-800 capitalize">{{ module.replace('_', ' ') }}</h2>
-                    <button onclick="deleteModule('{{ module }}')"
-                        class="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                    <button
+                        class="delete-module-btn px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
                         title="Supprimer le module entier">
                         🗑️ Module
                     </button>
@@ -54,11 +55,11 @@
                 <div class="space-y-2">
                     <p class="text-sm text-gray-600 font-semibold mb-2">Variables ({{ variables|length }}) :</p>
                     {% for variable in variables %}
-                    <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                        id="var-{{ module }}-{{ variable }}">
+                    <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg hover:bg-gray-100 transition-colors variable-row"
+                        data-variable="{{ variable | tojson }}">
                         <span class="text-gray-700">{{ variable }}</span>
-                        <button onclick="deleteVariable('{{ module }}', '{{ variable }}')"
-                            class="px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors"
+                        <button
+                            class="delete-var-btn px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors"
                             title="Supprimer cette variable">
                             ❌
                         </button>
@@ -77,7 +78,30 @@
     </div>
 
     <script>
-        function deleteVariable(module, variable) {
+        // Use event delegation for delete buttons to handle special characters in names
+        document.addEventListener('DOMContentLoaded', function () {
+            // Delete variable buttons
+            document.querySelectorAll('.delete-var-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const varRow = this.closest('.variable-row');
+                    const moduleCard = this.closest('.module-card');
+                    const variable = JSON.parse(varRow.dataset.variable);
+                    const module = JSON.parse(moduleCard.dataset.module);
+                    deleteVariable(module, variable, varRow, moduleCard);
+                });
+            });
+
+            // Delete module buttons
+            document.querySelectorAll('.delete-module-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const moduleCard = this.closest('.module-card');
+                    const module = JSON.parse(moduleCard.dataset.module);
+                    deleteModule(module, moduleCard);
+                });
+            });
+        });
+
+        function deleteVariable(module, variable, varElement, moduleCard) {
             if (!confirm(`⚠️ Supprimer définitivement la variable "${variable}" du module "${module}" ?\n\nToutes les mesures associées seront supprimées de la base de données.`)) {
                 return;
             }
@@ -93,7 +117,6 @@
                 .then(data => {
                     if (data.success) {
                         // Remove the variable element with fade-out
-                        const varElement = document.getElementById(`var-${module}-${variable}`);
                         if (varElement) {
                             varElement.style.transition = 'opacity 0.3s';
                             varElement.style.opacity = '0';
@@ -101,8 +124,7 @@
                                 varElement.remove();
 
                                 // Check if module has no more variables
-                                const moduleCard = document.getElementById(`module-${module}`);
-                                const remainingVars = moduleCard.querySelectorAll('[id^="var-"]');
+                                const remainingVars = moduleCard.querySelectorAll('.variable-row');
                                 if (remainingVars.length === 0) {
                                     moduleCard.style.transition = 'opacity 0.3s';
                                     moduleCard.style.opacity = '0';
@@ -113,7 +135,7 @@
 
                         alert(`✅ Variable "${variable}" supprimée (${data.deleted} mesures supprimées)`);
                     } else {
-                        alert('❌ Erreur lors de la suppression');
+                        alert('❌ Erreur lors de la suppression: ' + (data.error || 'Inconnue'));
                     }
                 })
                 .catch(error => {
@@ -122,7 +144,7 @@
                 });
         }
 
-        function deleteModule(module) {
+        function deleteModule(module, moduleCard) {
             if (!confirm(`⚠️ ATTENTION : Supprimer définitivement le module "${module}" ?\n\nToutes les variables et mesures associées seront supprimées de la base de données.\n\nCette action est IRRÉVERSIBLE.`)) {
                 return;
             }
@@ -138,7 +160,6 @@
                 .then(data => {
                     if (data.success) {
                         // Remove the module card with fade-out
-                        const moduleCard = document.getElementById(`module-${module}`);
                         if (moduleCard) {
                             moduleCard.style.transition = 'opacity 0.3s';
                             moduleCard.style.opacity = '0';
@@ -147,7 +168,7 @@
 
                         alert(`✅ Module "${module}" supprimé\n${data.deleted.measurements} mesures supprimées\n${data.deleted.publications} publications supprimées`);
                     } else {
-                        alert('❌ Erreur lors de la suppression');
+                        alert('❌ Erreur lors de la suppression: ' + (data.error || 'Inconnue'));
                     }
                 })
                 .catch(error => {
