@@ -61,6 +61,44 @@ def delay_humain(timestamp_iso):
 def dashboard():
     return render_template("dashboard.html", dashboard=dashboard_data, delay=delay_humain, messages=last_messages)
 
+@app.route("/analysis")
+def analysis():
+    global_stats = database.get_mqtt_analysis_global()
+    projects = database.get_mqtt_analysis_projects()
+    return render_template("analysis.html", global_stats=global_stats, projects=projects)
+
+@app.route("/api/mqtt/global")
+def api_mqtt_global():
+    """API endpoint for global MQTT stats"""
+    return jsonify(database.get_mqtt_analysis_global())
+
+@app.route("/api/mqtt/projects")
+def api_mqtt_projects():
+    """API endpoint for all projects analysis"""
+    return jsonify(database.get_mqtt_analysis_projects())
+
+@app.route("/api/mqtt/project/<project_name>")
+def api_mqtt_project_detail(project_name):
+    """API endpoint for specific project details"""
+    details = database.get_mqtt_project_details(project_name)
+    # Convert datetime objects to strings
+    if details['stats']:
+        if details['stats']['first_seen']:
+            details['stats']['first_seen'] = details['stats']['first_seen'].isoformat()
+        if details['stats']['last_seen']:
+            details['stats']['last_seen'] = details['stats']['last_seen'].isoformat()
+    for topic in details['top_topics']:
+        if topic['last_seen']:
+            topic['last_seen'] = topic['last_seen'].isoformat()
+            
+    # Convert recent messages timestamps
+    if 'recent_messages' in details:
+        for msg in details['recent_messages']:
+            if msg['timestamp']:
+                msg['timestamp'] = msg['timestamp'].isoformat()
+                
+    return jsonify(details)
+
 @app.route("/socketio-test")
 def socketio_test():
     """Test page for Socket.IO connection and events"""

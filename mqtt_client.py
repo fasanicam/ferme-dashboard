@@ -58,6 +58,49 @@ def on_message(client, userdata, msg):
         topic = msg.topic
         payload = msg.payload.decode()
         logging.info("Message reçu sur %s: %s", topic, payload)
+
+        # --- Analysis & Logging ---
+        parts = topic.split('/')
+        project = None
+        category = 'other'
+        is_compliant = False
+        
+        # Check structure
+        if len(parts) >= 3 and parts[0] == 'bzh' and parts[1] == 'mecatro':
+            if parts[2] == 'dashboard':
+                category = 'dashboard'
+                if len(parts) >= 5:
+                    project = parts[3]
+                    is_compliant = True
+            elif parts[2] == 'projets':
+                if len(parts) >= 4:
+                    project = parts[3]
+                    if len(parts) >= 6 and parts[4] in ['capteurs', 'actionneurs']:
+                        category = parts[4]
+                        is_compliant = True
+                    elif len(parts) >= 5 and parts[4] in ['capteurs', 'actionneurs']:
+                         # Case: .../projets/groupe/capteurs/nom -> len 6
+                         # Wait, prompt says: bzh/mecatro/projets/<GROUPE>/capteurs/<NOM>
+                         # parts: 0/1/2/3/4/5
+                         category = parts[4]
+                         is_compliant = True
+                    else:
+                        category = 'project_structure_error'
+        
+        # Only log messages from bzh/mecatro hierarchy
+        if len(parts) >= 2 and parts[0] == 'bzh' and parts[1] == 'mecatro':
+            database.log_mqtt_message(topic, payload, project, category, is_compliant)
+        
+        # Cleanup old messages periodically (every 1000 messages)
+        # This keeps the database size under control
+        if hasattr(on_message, 'message_count'):
+            on_message.message_count += 1
+        else:
+            on_message.message_count = 1
+            
+        if on_message.message_count % 1000 == 0:
+            database.cleanup_old_mqtt_messages()
+        # --------------------------
         
         # Log message receipt for stats
         database.log_message_receipt()

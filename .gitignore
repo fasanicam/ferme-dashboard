@@ -55,3 +55,6 @@ Thumbs.db
 *.tmp
 *.bak
 *.backup
+
+# Binary executables
+tailwindcss-linux-x64

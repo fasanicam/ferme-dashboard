@@ -3,3 +3,4 @@ flask-socketio
 eventlet
 paho-mqtt
 flask
+mysql-connector-python
