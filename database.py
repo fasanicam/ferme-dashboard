@@ -220,15 +220,35 @@ def get_mqtt_analysis_global():
     compliant = c.fetchone()['compliant']
     compliance_rate = (compliant / total * 100) if total > 0 else 0
     
+    # Non-compliant count
+    non_compliant = total - compliant
+    
     # Active projects (last 24h)
-    c.execute("SELECT COUNT(DISTINCT project) as active_projects FROM mqtt_messages WHERE timestamp >= NOW() - INTERVAL 24 HOUR")
+    c.execute("SELECT COUNT(DISTINCT project) as active_projects FROM mqtt_messages WHERE timestamp >= NOW() - INTERVAL 24 HOUR AND project IS NOT NULL AND project != ''")
     active_projects = c.fetchone()['active_projects']
+    
+    # Category breakdown
+    c.execute("""
+        SELECT category, COUNT(*) as count 
+        FROM mqtt_messages 
+        GROUP BY category
+        ORDER BY count DESC
+    """)
+    categories = {row['category']: row['count'] for row in c.fetchall()}
+    
+    # Unknown traffic (no project identified)
+    c.execute("SELECT COUNT(*) as unknown FROM mqtt_messages WHERE project IS NULL OR project = ''")
+    unknown_traffic = c.fetchone()['unknown']
     
     conn.close()
     return {
         "total_messages": total,
+        "compliant_messages": compliant,
+        "non_compliant_messages": non_compliant,
         "compliance_rate": round(compliance_rate, 1),
-        "active_projects": active_projects
+        "active_projects": active_projects,
+        "categories": categories,
+        "unknown_traffic": unknown_traffic
     }
 
 def get_mqtt_analysis_projects():

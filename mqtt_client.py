@@ -35,8 +35,9 @@ _socketio = None
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         logging.info("✅ Connecté au broker MQTT: mqtt.dev.icam.school")
-        client.subscribe("bzh/mecatro/dashboard/#")
-        logging.info("📡 Abonné au topic: bzh/mecatro/dashboard/#")
+        # Subscribe to ALL bzh/mecatro traffic for complete monitoring
+        client.subscribe("bzh/mecatro/#")
+        logging.info("📡 Abonné au topic: bzh/mecatro/# (monitoring complet)")
     else:
         logging.error("❌ Échec de connexion au broker MQTT, code: %s. Tentative de reconnexion...", rc)
         try:
@@ -64,28 +65,51 @@ def on_message(client, userdata, msg):
         project = None
         category = 'other'
         is_compliant = False
+        error_reason = None
         
-        # Check structure
+        # Check structure according to the IoT Guide:
+        # Dashboard: bzh/mecatro/dashboard/<NOM_PROJET>/<NOM_VARIABLE> = EXACTLY 5 parts
+        # Private/Projets: bzh/mecatro/projets/<GROUPE>/capteurs/<NOM> = EXACTLY 6 parts
+        #                 bzh/mecatro/projets/<GROUPE>/actionneurs/<NOM> = EXACTLY 6 parts
+        
         if len(parts) >= 3 and parts[0] == 'bzh' and parts[1] == 'mecatro':
             if parts[2] == 'dashboard':
                 category = 'dashboard'
-                if len(parts) >= 5:
+                if len(parts) >= 4:
                     project = parts[3]
+                
+                # STRICT CHECK: Dashboard must have EXACTLY 5 parts
+                if len(parts) == 5:
                     is_compliant = True
+                elif len(parts) > 5:
+                    # Too many levels (e.g., /air/temperature instead of /temperature)
+                    is_compliant = False
+                    error_reason = f"Trop de niveaux ({len(parts)} au lieu de 5). Format attendu: bzh/mecatro/dashboard/<PROJET>/<VARIABLE>"
+                    logging.warning(f"Topic NON CONFORME: {topic} - {error_reason}")
+                else:
+                    # Not enough parts
+                    is_compliant = False
+                    error_reason = f"Pas assez de niveaux ({len(parts)}). Format attendu: bzh/mecatro/dashboard/<PROJET>/<VARIABLE>"
+                    logging.warning(f"Topic NON CONFORME: {topic} - {error_reason}")
+                    
             elif parts[2] == 'projets':
                 if len(parts) >= 4:
                     project = parts[3]
-                    if len(parts) >= 6 and parts[4] in ['capteurs', 'actionneurs']:
-                        category = parts[4]
-                        is_compliant = True
-                    elif len(parts) >= 5 and parts[4] in ['capteurs', 'actionneurs']:
-                         # Case: .../projets/groupe/capteurs/nom -> len 6
-                         # Wait, prompt says: bzh/mecatro/projets/<GROUPE>/capteurs/<NOM>
-                         # parts: 0/1/2/3/4/5
-                         category = parts[4]
-                         is_compliant = True
-                    else:
-                        category = 'project_structure_error'
+                    
+                # STRICT CHECK: Projets must have EXACTLY 6 parts with capteurs/actionneurs at position 4
+                if len(parts) == 6 and parts[4] in ['capteurs', 'actionneurs']:
+                    category = parts[4]
+                    is_compliant = True
+                elif len(parts) >= 5 and parts[4] in ['capteurs', 'actionneurs']:
+                    category = parts[4]
+                    is_compliant = False
+                    error_reason = f"Nombre de niveaux incorrect ({len(parts)} au lieu de 6)"
+                    logging.warning(f"Topic NON CONFORME: {topic} - {error_reason}")
+                else:
+                    category = 'project_structure_error'
+                    is_compliant = False
+                    error_reason = "Structure invalide pour projets (attendu: .../projets/<GROUPE>/capteurs|actionneurs/<NOM>)"
+                    logging.warning(f"Topic NON CONFORME: {topic} - {error_reason}")
         
         # Only log messages from bzh/mecatro hierarchy
         if len(parts) >= 2 and parts[0] == 'bzh' and parts[1] == 'mecatro':
