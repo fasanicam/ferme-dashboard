@@ -12,7 +12,7 @@ app = Flask(__name__)
 # Handle proxy headers from Traefik
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins="*")
 
 # Admin password
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'jesuisdavid')

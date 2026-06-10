@@ -1,4 +1,5 @@
 import mysql.connector
+from mysql.connector import pooling
 from datetime import datetime
 import os
 import time
@@ -10,22 +11,38 @@ DB_USER = os.environ.get('DB_USER', 'prof_bzh')
 DB_PASSWORD = os.environ.get('DB_PASSWORD', 'prof_bzh@root')
 DB_NAME = os.environ.get('DB_NAME', 'icambzh')
 
+# Pool de connexions persistantes — évite d'ouvrir une nouvelle connexion TCP
+# à chaque requête HTTP (gain ~300ms par appel)
+_db_pool = None
+
+def _get_pool():
+    global _db_pool
+    if _db_pool is None:
+        retries = 5
+        while retries > 0:
+            try:
+                _db_pool = pooling.MySQLConnectionPool(
+                    pool_name="ferme_pool",
+                    pool_size=5,
+                    host=DB_HOST,
+                    user=DB_USER,
+                    password=DB_PASSWORD,
+                    database=DB_NAME,
+                    autocommit=False,
+                )
+                logging.info("[DB] Pool de connexions initialisé (5 connexions)")
+                break
+            except mysql.connector.Error as err:
+                logging.error(f"[DB] Erreur init pool: {err}")
+                retries -= 1
+                time.sleep(2)
+        if _db_pool is None:
+            raise Exception("Impossible d'initialiser le pool de connexions")
+    return _db_pool
+
 def get_db_connection():
-    retries = 5
-    while retries > 0:
-        try:
-            conn = mysql.connector.connect(
-                host=DB_HOST,
-                user=DB_USER,
-                password=DB_PASSWORD,
-                database=DB_NAME
-            )
-            return conn
-        except mysql.connector.Error as err:
-            logging.error(f"Erreur de connexion DB: {err}")
-            retries -= 1
-            time.sleep(2)
-    raise Exception("Impossible de se connecter à la base de données")
+    """Retourne une connexion depuis le pool. Doit être fermée après usage (libère dans le pool)."""
+    return _get_pool().get_connection()
 
 def init_db():
     conn = get_db_connection()
@@ -51,8 +68,6 @@ def init_db():
                   timestamp DATETIME)''')
 
     # NEW: Table for detailed MQTT message analysis (Last 1M messages)
-    # We will periodically clean this table or use a capped collection approach if needed.
-    # For now, standard table.
     c.execute('''CREATE TABLE IF NOT EXISTS mqtt_messages
                  (id INT AUTO_INCREMENT PRIMARY KEY,
                   topic VARCHAR(512),
@@ -65,6 +80,32 @@ def init_db():
                   INDEX idx_project (project))''')
 
     conn.commit()
+
+    # --- Index pour accélérer les requêtes lentes ---
+    # /api/stats/messages : GROUP BY DATE_FORMAT(timestamp) → full scan sans index
+    try:
+        c.execute("CREATE INDEX idx_msg_stats_ts ON message_stats(timestamp)")
+        conn.commit()
+        logging.info("[DB] Index idx_msg_stats_ts créé")
+    except mysql.connector.Error:
+        pass  # Index déjà existant
+
+    # /api/history/<module>/<variable> : WHERE module+variable ORDER BY timestamp
+    try:
+        c.execute("CREATE INDEX idx_meas_mod_var_ts ON measurements(module, variable, timestamp)")
+        conn.commit()
+        logging.info("[DB] Index idx_meas_mod_var_ts créé")
+    except mysql.connector.Error:
+        pass  # Index déjà existant
+
+    # /api/stats/publications : WHERE timestamp >= ... GROUP BY module, hour
+    try:
+        c.execute("CREATE INDEX idx_mod_pub_ts ON module_publications(timestamp, module)")
+        conn.commit()
+        logging.info("[DB] Index idx_mod_pub_ts créé")
+    except mysql.connector.Error:
+        pass  # Index déjà existant
+
     conn.close()
 
 def save_measurement(module, variable, value):
@@ -109,6 +150,8 @@ def log_mqtt_message(topic, payload, project, category, is_compliant):
 def get_history(module, variable, limit=100):
     conn = get_db_connection()
     c = conn.cursor()
+    # Utiliser l'index composite (module, variable, timestamp) avec LIMIT pour éviter de scanner
+    # 1M+ lignes. Le ORDER BY DESC + LIMIT permet à MariaDB d'utiliser l'index efficacement.
     c.execute("SELECT value, timestamp FROM measurements WHERE module=%s AND variable=%s ORDER BY timestamp DESC LIMIT %s",
               (module, variable, limit))
     data = c.fetchall()
@@ -120,11 +163,12 @@ def get_message_stats(limit=60):
     """Returns message count per minute for the last 'limit' minutes."""
     conn = get_db_connection()
     c = conn.cursor()
-    # MySQL syntax for date formatting
+    # Limiter à la dernière heure pour éviter un scan de 2M+ lignes
     c.execute('''SELECT DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i') as minute, COUNT(*) 
                  FROM message_stats 
+                 WHERE timestamp >= NOW() - INTERVAL %s MINUTE
                  GROUP BY minute 
-                 ORDER BY minute DESC LIMIT %s''', (limit,))
+                 ORDER BY minute DESC LIMIT %s''', (limit, limit))
     data = c.fetchall()
     conn.close()
     return data[::-1]
