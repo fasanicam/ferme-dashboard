@@ -14,6 +14,7 @@ import {
 } from '../utils/state'
 import { evaluateMqttCompliance } from '../utils/compliance'
 import type { AmbiancePayload, AmbianceEntry } from '../utils/types'
+import { GRANDEURS_NORMALISEES } from '../utils/types'
 import {
   saveMeasurement,
   logMessageReceipt,
@@ -220,11 +221,17 @@ export default defineNitroPlugin(async () => {
           })
         }
 
-        // 6. Handle Ambiance Topic: bzh/mecatro/ambiance/<grandeur>/<groupe>
+        // 6. Handle Ambiance Topic: bzh/mecatro/ambiance/<groupe>/<grandeur>
         //    Payload MUST be valid JSON with {valeur, unite, type, dateheure}
         else if (parts.length === 5 && parts[0] === 'bzh' && parts[1] === 'mecatro' && parts[2] === 'ambiance') {
-          const grandeur = parts[3]
-          const groupe = parts[4]
+          let groupe = parts[3]
+          let grandeur = parts[4]
+
+          // Legacy format fallback: bzh/mecatro/ambiance/<grandeur>/<groupe>
+          if (parts[3] in GRANDEURS_NORMALISEES && !(parts[4] in GRANDEURS_NORMALISEES)) {
+            grandeur = parts[3]
+            groupe = parts[4]
+          }
 
           if (!compliance.isCompliant) {
             // Log but do not store — payload JSON invalid or topic non-conformant

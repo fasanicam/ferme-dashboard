@@ -135,18 +135,27 @@ export function evaluateMqttCompliance(topic: string, payload?: string): Complia
     // --- AMBIANCE ---
     } else if (parts[2] === 'ambiance') {
       category = 'ambiance'
-      if (parts.length >= 5) {
-        project = parts[4]
+      if (parts.length >= 4) {
+        project = parts[3]
       }
 
       if (parts.length !== 5) {
         isCompliant = false
-        errorReason = `Nombre de niveaux incorrect (${parts.length} au lieu de 5). Format attendu: bzh/mecatro/ambiance/<GRANDEUR>/<GROUPE>`
+        errorReason = `Nombre de niveaux incorrect (${parts.length} au lieu de 5). Format attendu: bzh/mecatro/ambiance/<GROUPE>/<GRANDEUR>`
       } else {
-        const grandeur = parts[3]
+        let groupe = parts[3]
+        let grandeur = parts[4]
+
+        // Legacy format fallback: bzh/mecatro/ambiance/<GRANDEUR>/<GROUPE>
+        if (!(grandeur in GRANDEURS_NORMALISEES) && (parts[3] in GRANDEURS_NORMALISEES)) {
+          grandeur = parts[3]
+          groupe = parts[4]
+          project = groupe
+        }
+
         if (!(grandeur in GRANDEURS_NORMALISEES)) {
           isCompliant = false
-          errorReason = `Grandeur "${grandeur}" inconnue. Grandeurs autorisées : ${Object.keys(GRANDEURS_NORMALISEES).join(', ')}`
+          errorReason = `Grandeur "${grandeur}" inconnue. Format attendu: bzh/mecatro/ambiance/<GROUPE>/<GRANDEUR> avec une grandeur parmi : ${Object.keys(GRANDEURS_NORMALISEES).join(', ')}`
         } else if (payload !== undefined) {
           payloadError = validateJsonPayload(payload)
           isCompliant = payloadError === null
@@ -158,8 +167,8 @@ export function evaluateMqttCompliance(topic: string, payload?: string): Complia
         }
       }
 
-    // --- PROJETS (private) ---
-    } else if (parts[2] === 'projets') {
+    // --- PRIVE / PROJETS (private) ---
+    } else if (parts[2] === 'prive' || parts[2] === 'projets') {
       if (parts.length >= 4) {
         project = parts[3]
       }
@@ -170,11 +179,11 @@ export function evaluateMqttCompliance(topic: string, payload?: string): Complia
       } else if (parts.length >= 5 && (parts[4] === 'capteurs' || parts[4] === 'actionneurs')) {
         category = parts[4]
         isCompliant = false
-        errorReason = `Nombre de niveaux incorrect (${parts.length} au lieu de 6). Attendu: bzh/mecatro/projets/<GROUPE>/${parts[4]}/<NOM>`
+        errorReason = `Nombre de niveaux incorrect (${parts.length} au lieu de 6). Attendu: bzh/mecatro/prive/<PROJET>/${parts[4]}/<NOM>`
       } else {
         category = 'project_structure_error'
         isCompliant = false
-        errorReason = 'Structure invalide pour projets (attendu: .../projets/<GROUPE>/capteurs|actionneurs/<NOM>)'
+        errorReason = 'Structure invalide pour prive (attendu: .../prive/<PROJET>/capteurs|actionneurs/<NOM>)'
       }
 
     } else {

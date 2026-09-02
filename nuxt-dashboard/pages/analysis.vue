@@ -176,7 +176,7 @@
             <span>Conformité Ambiance (Données Partagées)</span>
           </h2>
           <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Validation du format JSON normalisé sur <code class="font-mono text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">bzh/mecatro/ambiance/&lt;GRANDEUR&gt;/&lt;GROUPE&gt;</code>
+            Validation du format JSON normalisé sur <code class="font-mono text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">bzh/mecatro/ambiance/&lt;GROUPE&gt;/&lt;GRANDEUR&gt;</code>
           </p>
         </div>
       </div>

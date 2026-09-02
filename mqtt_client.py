@@ -69,8 +69,9 @@ def on_message(client, userdata, msg):
         
         # Check structure according to the IoT Guide:
         # Dashboard: bzh/mecatro/dashboard/<NOM_PROJET>/<NOM_VARIABLE> = EXACTLY 5 parts
-        # Private/Projets: bzh/mecatro/projets/<GROUPE>/capteurs/<NOM> = EXACTLY 6 parts
-        #                 bzh/mecatro/projets/<GROUPE>/actionneurs/<NOM> = EXACTLY 6 parts
+        # Ambiance:  bzh/mecatro/ambiance/<GROUPE>/<GRANDEUR> = EXACTLY 5 parts
+        # Private:   bzh/mecatro/prive/<GROUPE>/capteurs/<NOM> = EXACTLY 6 parts
+        #            bzh/mecatro/prive/<GROUPE>/actionneurs/<NOM> = EXACTLY 6 parts
         
         if len(parts) >= 3 and parts[0] == 'bzh' and parts[1] == 'mecatro':
             if parts[2] == 'dashboard':
@@ -91,24 +92,35 @@ def on_message(client, userdata, msg):
                     is_compliant = False
                     error_reason = f"Pas assez de niveaux ({len(parts)}). Format attendu: bzh/mecatro/dashboard/<PROJET>/<VARIABLE>"
                     logging.warning(f"Topic NON CONFORME: {topic} - {error_reason}")
+
+            elif parts[2] == 'ambiance':
+                category = 'ambiance'
+                if len(parts) >= 4:
+                    project = parts[3]
+                if len(parts) == 5:
+                    is_compliant = True
+                else:
+                    is_compliant = False
+                    error_reason = f"Nombre de niveaux incorrect ({len(parts)} au lieu de 5). Format attendu: bzh/mecatro/ambiance/<GROUPE>/<GRANDEUR>"
+                    logging.warning(f"Topic NON CONFORME: {topic} - {error_reason}")
                     
-            elif parts[2] == 'projets':
+            elif parts[2] in ['prive', 'projets']:
                 if len(parts) >= 4:
                     project = parts[3]
                     
-                # STRICT CHECK: Projets must have EXACTLY 6 parts with capteurs/actionneurs at position 4
+                # STRICT CHECK: Private must have EXACTLY 6 parts with capteurs/actionneurs at position 4
                 if len(parts) == 6 and parts[4] in ['capteurs', 'actionneurs']:
                     category = parts[4]
                     is_compliant = True
                 elif len(parts) >= 5 and parts[4] in ['capteurs', 'actionneurs']:
                     category = parts[4]
                     is_compliant = False
-                    error_reason = f"Nombre de niveaux incorrect ({len(parts)} au lieu de 6)"
+                    error_reason = f"Nombre de niveaux incorrect ({len(parts)} au lieu de 6). Attendu: bzh/mecatro/prive/<GROUPE>/{parts[4]}/<NOM>"
                     logging.warning(f"Topic NON CONFORME: {topic} - {error_reason}")
                 else:
                     category = 'project_structure_error'
                     is_compliant = False
-                    error_reason = "Structure invalide pour projets (attendu: .../projets/<GROUPE>/capteurs|actionneurs/<NOM>)"
+                    error_reason = "Structure invalide pour prive (attendu: .../prive/<GROUPE>/capteurs|actionneurs/<NOM>)"
                     logging.warning(f"Topic NON CONFORME: {topic} - {error_reason}")
         
         # Only log messages from bzh/mecatro hierarchy

@@ -76,8 +76,15 @@ export default defineEventHandler(async () => {
     for (const row of rows) {
       const parts = (row.topic || '').split('/')
       if (parts.length !== 5) continue
-      const grandeur = parts[3]
-      const groupe = parts[4]
+      let groupe = parts[3]
+      let grandeur = parts[4]
+
+      // Legacy format fallback: bzh/mecatro/ambiance/<grandeur>/<groupe>
+      if (parts[3] in GRANDEURS_NORMALISEES && !(parts[4] in GRANDEURS_NORMALISEES)) {
+        grandeur = parts[3]
+        groupe = parts[4]
+      }
+
       const key = `${grandeur}:${groupe}`
 
       if (!grandeurStats[grandeur]) {

@@ -314,10 +314,10 @@
       <div class="p-6 rounded-3xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-3 text-xs text-slate-600 dark:text-slate-400">
         <h4 class="font-bold text-slate-800 dark:text-slate-200 text-sm">📖 Guide — Ambiance (données partagées)</h4>
         <div class="space-y-1">
-          <p>Topic : <code class="font-mono text-violet-600 dark:text-violet-400">bzh/mecatro/ambiance/&lt;GRANDEUR&gt;/&lt;GROUPE&gt;</code></p>
+          <p>Topic : <code class="font-mono text-violet-600 dark:text-violet-400">bzh/mecatro/ambiance/&lt;GROUPE&gt;/&lt;GRANDEUR&gt;</code></p>
           <p>Même format JSON que le dashboard. Flag <strong>retain=true obligatoire</strong>.</p>
         </div>
-        <p class="text-amber-600 dark:text-amber-400 font-semibold">⚠️ Fréquence max : entre 0.1 et 0.2 Hz (1 message toutes les 5 à 10 s) <strong>par topic</strong> (c.-à-d. par couple <code class="font-mono">grandeur:groupe</code>).</p>
+        <p class="text-amber-600 dark:text-amber-400 font-semibold">⚠️ Fréquence max : entre 0.1 et 0.2 Hz (1 message toutes les 5 à 10 s) <strong>par topic</strong> (c.-à-d. par couple <code class="font-mono">groupe:grandeur</code>).</p>
       </div>
 
     </div>
@@ -501,7 +501,7 @@ function applyAmbiancePreset(p: any) {
   ambSuccess.value = ''; ambError.value = ''
 }
 
-const ambTopic = computed(() => `bzh/mecatro/ambiance/${amb.grandeur.trim() || '<GRANDEUR>'}/${amb.groupe.trim() || '<GROUPE>'}`)
+const ambTopic = computed(() => `bzh/mecatro/ambiance/${amb.groupe.trim() || '<GROUPE>'}/${amb.grandeur.trim() || '<GRANDEUR>'}`)
 const isAmbTopicValid = computed(() => amb.grandeur.trim().length > 0 && amb.groupe.trim().length > 0 && amb.grandeur in grandeurs)
 
 const ambPayloadPreview = computed(() => JSON.stringify({

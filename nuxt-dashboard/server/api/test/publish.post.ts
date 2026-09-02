@@ -12,7 +12,7 @@ import { GRANDEURS_NORMALISEES } from '../../utils/types'
  *
  * Mode ambiance (payload JSON normalisé, retain=true) :
  *   { mode: 'ambiance', grandeur, groupe, valeur, unite, type, dateheure? }
- *   → topic: bzh/mecatro/ambiance/<grandeur>/<groupe>
+ *   → topic: bzh/mecatro/ambiance/<groupe>/<grandeur>
  *
  * Mode custom (topic + payload libre — pour usage avancé) :
  *   { customTopic, value }
@@ -89,7 +89,7 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, message: `Payload invalide : ${error}` })
     }
 
-    const topic = `bzh/mecatro/ambiance/${grandeur}/${groupe}`
+    const topic = `bzh/mecatro/ambiance/${groupe}/${grandeur}`
     try {
       // Ambiance requires retain=true
       await publishMqttRetain(topic, payload)
