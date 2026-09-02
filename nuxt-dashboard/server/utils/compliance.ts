@@ -173,17 +173,18 @@ export function evaluateMqttCompliance(topic: string, payload?: string): Complia
         project = parts[3]
       }
 
-      if (parts.length === 6 && (parts[4] === 'capteurs' || parts[4] === 'actionneurs')) {
-        category = parts[4]
+      const isSensorOrActuator = ['capteur', 'capteurs', 'actionneur', 'actionneurs'].includes(parts[4])
+      if (parts.length === 6 && isSensorOrActuator) {
+        category = parts[4].endsWith('s') ? parts[4] : `${parts[4]}s`
         isCompliant = true
-      } else if (parts.length >= 5 && (parts[4] === 'capteurs' || parts[4] === 'actionneurs')) {
+      } else if (parts.length >= 5 && isSensorOrActuator) {
         category = parts[4]
         isCompliant = false
         errorReason = `Nombre de niveaux incorrect (${parts.length} au lieu de 6). Attendu: bzh/mecatro/prive/<PROJET>/${parts[4]}/<NOM>`
       } else {
         category = 'project_structure_error'
         isCompliant = false
-        errorReason = 'Structure invalide pour prive (attendu: .../prive/<PROJET>/capteurs|actionneurs/<NOM>)'
+        errorReason = 'Structure invalide pour prive (attendu: .../prive/<PROJET>/capteur(s)|actionneur(s)/<NOM>)'
       }
 
     } else {

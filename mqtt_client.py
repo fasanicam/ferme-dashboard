@@ -108,11 +108,12 @@ def on_message(client, userdata, msg):
                 if len(parts) >= 4:
                     project = parts[3]
                     
-                # STRICT CHECK: Private must have EXACTLY 6 parts with capteurs/actionneurs at position 4
-                if len(parts) == 6 and parts[4] in ['capteurs', 'actionneurs']:
-                    category = parts[4]
+                # STRICT CHECK: Private must have EXACTLY 6 parts with capteur(s)/actionneur(s) at position 4
+                is_sensor_or_actuator = len(parts) >= 5 and parts[4] in ['capteur', 'capteurs', 'actionneur', 'actionneurs']
+                if len(parts) == 6 and is_sensor_or_actuator:
+                    category = parts[4] if parts[4].endswith('s') else f"{parts[4]}s"
                     is_compliant = True
-                elif len(parts) >= 5 and parts[4] in ['capteurs', 'actionneurs']:
+                elif len(parts) >= 5 and is_sensor_or_actuator:
                     category = parts[4]
                     is_compliant = False
                     error_reason = f"Nombre de niveaux incorrect ({len(parts)} au lieu de 6). Attendu: bzh/mecatro/prive/<GROUPE>/{parts[4]}/<NOM>"
@@ -120,7 +121,7 @@ def on_message(client, userdata, msg):
                 else:
                     category = 'project_structure_error'
                     is_compliant = False
-                    error_reason = "Structure invalide pour prive (attendu: .../prive/<GROUPE>/capteurs|actionneurs/<NOM>)"
+                    error_reason = "Structure invalide pour prive (attendu: .../prive/<GROUPE>/capteur(s)|actionneur(s)/<NOM>)"
                     logging.warning(f"Topic NON CONFORME: {topic} - {error_reason}")
         
         # Only log messages from bzh/mecatro hierarchy
