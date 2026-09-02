@@ -32,6 +32,15 @@
       >
         🌡️ Ambiance (partagé)
       </button>
+      <button
+        @click="activeTab = 'prive'"
+        :class="activeTab === 'prive'
+          ? 'bg-white dark:bg-[#131D33] text-slate-900 dark:text-white shadow-sm'
+          : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+        class="px-5 py-2 rounded-xl text-sm font-bold transition-all"
+      >
+        🔒 Privé
+      </button>
     </div>
 
     <!-- ===================== TAB: DASHBOARD ===================== -->
@@ -322,11 +331,169 @@
 
     </div>
 
+    <!-- ===================== TAB: PRIVE ===================== -->
+    <div v-if="activeTab === 'prive'" class="space-y-6">
+
+      <!-- Presets -->
+      <div class="p-6 rounded-3xl bg-white dark:bg-[#131D33] border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-3">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Exemples Rapides</h3>
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-for="(p, idx) in privePresets"
+            :key="idx"
+            @click="applyPrivePreset(p)"
+            class="px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-orange-50 dark:hover:bg-orange-950/60 border border-slate-200 dark:border-slate-800 hover:border-orange-500 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all flex items-center space-x-2"
+          >
+            <span>{{ p.icon }}</span>
+            <span>{{ p.name }}</span>
+            <span class="font-mono text-orange-600 dark:text-orange-400">{{ p.canal }}/{{ p.nom }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Prive Publisher Form -->
+      <div class="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#131D33] border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-6">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Nom du Projet</label>
+            <input v-model="priv.projet" type="text" placeholder="ex: miamconnect, serre, ruche"
+              class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Canal</label>
+            <select v-model="priv.canal"
+              class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              <option value="capteurs">capteurs (Pico → App)</option>
+              <option value="actionneurs">actionneurs (App → Pico)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Nom du capteur / actionneur</label>
+          <input v-model="priv.nom" type="text" placeholder="ex: poids, pompe, moteur, presence"
+            class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Payload (libre — texte, nombre, JSON…)</label>
+          <textarea v-model="priv.payload" rows="3" placeholder="ex: 120 ou ON ou {\"vitesse\": 80}"
+            class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+          />
+        </div>
+
+        <!-- Topic Preview -->
+        <div class="space-y-3">
+          <div class="p-4 rounded-2xl border transition-all"
+            :class="isPrivTopicValid ? 'bg-orange-50/70 dark:bg-orange-950/30 border-orange-300 dark:border-orange-800' : 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800'"
+          >
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="text-xs font-bold uppercase tracking-wider"
+                :class="isPrivTopicValid ? 'text-orange-800 dark:text-orange-300' : 'text-rose-800 dark:text-rose-300'"
+              >Topic privé</span>
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase"
+                :class="isPrivTopicValid ? 'bg-orange-200 text-orange-900 dark:bg-orange-900 dark:text-orange-200' : 'bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-200'"
+              >{{ isPrivTopicValid ? '✓ Conforme' : '✗ Incomplet' }}</span>
+            </div>
+            <div class="font-mono text-sm font-bold text-slate-900 dark:text-white break-all">{{ privTopic }}</div>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
+          <button
+            @click="publishPrive"
+            :disabled="privPublishing || !isPrivTopicValid || !priv.payload.trim()"
+            class="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm shadow-md shadow-orange-600/20 disabled:opacity-50 transition-all flex items-center justify-center space-x-2"
+          >
+            <Send :size="16" :class="{ 'animate-pulse': privPublishing }" />
+            <span>{{ privPublishing ? 'Publication...' : 'Publier sur le canal privé' }}</span>
+          </button>
+          <span v-if="privSuccess" class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+            <CheckCircle2 :size="16" /><span>{{ privSuccess }}</span>
+          </span>
+          <span v-if="privError" class="text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+            <AlertCircle :size="16" /><span>{{ privError }}</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Guide Privé -->
+      <div class="p-6 rounded-3xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-3 text-xs text-slate-600 dark:text-slate-400">
+        <h4 class="font-bold text-slate-800 dark:text-slate-200 text-sm">📖 Guide — Espace Privé (télécommande interne)</h4>
+        <div class="space-y-1">
+          <p>Capteurs (Pico → App) : <code class="font-mono text-orange-600 dark:text-orange-400">bzh/mecatro/prive/&lt;PROJET&gt;/capteurs/&lt;NOM&gt;</code></p>
+          <p>Actionneurs (App → Pico) : <code class="font-mono text-orange-600 dark:text-orange-400">bzh/mecatro/prive/&lt;PROJET&gt;/actionneurs/&lt;NOM&gt;</code></p>
+          <p>Payload <strong>libre</strong> — texte, nombre, JSON, ON/OFF… Format non contraint.</p>
+        </div>
+        <div class="mt-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold">
+          🔒 Ce canal est privé : seuls vos appareils abonnés à <code class="font-mono">bzh/mecatro/prive/&lt;PROJET&gt;/#</code> reçoivent vos messages.
+        </div>
+      </div>
+
+    </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { Send, CheckCircle2, AlertCircle } from 'lucide-vue-next'
+
+// ===================== PRIVE =====================
+const priv = reactive({
+  projet: 'miamconnect',
+  canal: 'actionneurs',
+  nom: 'moteur',
+  payload: 'ON'
+})
+const privPublishing = ref(false)
+const privSuccess = ref('')
+const privError = ref('')
+
+const privePresets = [
+  { icon: '🍗', name: 'Distribuer',    projet: 'miamconnect', canal: 'actionneurs', nom: 'moteur',   payload: 'ON'  },
+  { icon: '💧', name: 'Remplir eau',   projet: 'miamconnect', canal: 'actionneurs', nom: 'pompe',    payload: 'ON'  },
+  { icon: '⚖️', name: 'Poids',         projet: 'miamconnect', canal: 'capteurs',    nom: 'poids',    payload: '120' },
+  { icon: '🚪', name: 'Trappe',        projet: 'poulailler',  canal: 'actionneurs', nom: 'trappe',   payload: 'OPEN'},
+  { icon: '📡', name: 'Présence',      projet: 'miamconnect', canal: 'capteurs',    nom: 'presence', payload: '1'   },
+]
+
+function applyPrivePreset(p: any) {
+  priv.projet = p.projet
+  priv.canal = p.canal
+  priv.nom = p.nom
+  priv.payload = p.payload
+  privSuccess.value = ''
+  privError.value = ''
+}
+
+const privTopic = computed(() =>
+  `bzh/mecatro/prive/${priv.projet.trim() || '<PROJET>'}/${priv.canal}/${priv.nom.trim() || '<NOM>'}`
+)
+const isPrivTopicValid = computed(() =>
+  priv.projet.trim().length > 0 && priv.nom.trim().length > 0
+)
+
+async function publishPrive() {
+  privPublishing.value = true
+  privSuccess.value = ''
+  privError.value = ''
+  try {
+    const res = await $fetch<{ success: boolean; topic: string }>('/api/test/publish', {
+      method: 'POST',
+      body: { customTopic: privTopic.value, value: priv.payload }
+    })
+    if (res?.success) privSuccess.value = `Publié sur ${res.topic} ✓`
+  } catch (err: any) {
+    privError.value = err.data?.message || err.message || 'Erreur lors de la publication'
+  } finally {
+    privPublishing.value = false
+  }
+}
 
 function syntaxHighlight(json: string) {
   if (!json) return '';
@@ -348,7 +515,7 @@ function syntaxHighlight(json: string) {
   });
 }
 
-const activeTab = ref<'dashboard' | 'ambiance'>('dashboard')
+const activeTab = ref<'dashboard' | 'ambiance' | 'prive'>('dashboard')
 
 const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
