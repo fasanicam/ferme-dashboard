@@ -142,7 +142,7 @@
                 :class="dashPayloadError ? 'bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-200' : 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200'"
               >{{ dashPayloadError ? '✗ Invalide' : '✓ Valide' }}</span>
             </div>
-            <pre class="font-mono text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-all">{{ dashPayloadPreview }}</pre>
+            <pre class="font-mono text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-all" v-html="syntaxHighlight(dashPayloadPreview)"></pre>
             <p v-if="dashPayloadError" class="mt-2 text-xs text-rose-600 dark:text-rose-400 font-medium">⚠️ {{ dashPayloadError }}</p>
           </div>
         </div>
@@ -172,7 +172,7 @@
         <div class="space-y-1">
           <p>Topic : <code class="font-mono text-emerald-600 dark:text-emerald-400">bzh/mecatro/dashboard/&lt;PROJET&gt;/&lt;VARIABLE&gt;</code></p>
           <p>Payload <strong>JSON obligatoire</strong> avec les 4 champs :</p>
-          <pre class="p-3 rounded-xl bg-white dark:bg-slate-950 font-mono text-emerald-600 dark:text-emerald-400 border border-slate-200 dark:border-slate-800 text-[11px]">{{ exampleDashPayload }}</pre>
+          <pre class="p-3 rounded-xl bg-white dark:bg-slate-950 font-mono text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800 text-[11px]" v-html="syntaxHighlight(exampleDashPayload)"></pre>
         </div>
         <p>L'affichage sur le dashboard sera : <strong>"{{ dashDisplayPreview }}"</strong></p>
         <div class="mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold">
@@ -287,7 +287,7 @@
                 :class="ambPayloadError ? 'bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-200' : 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200'"
               >{{ ambPayloadError ? '✗ Invalide' : '✓ Valide' }}</span>
             </div>
-            <pre class="font-mono text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-all">{{ ambPayloadPreview }}</pre>
+            <pre class="font-mono text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-all" v-html="syntaxHighlight(ambPayloadPreview)"></pre>
             <p v-if="ambPayloadError" class="mt-2 text-xs text-rose-600 dark:text-rose-400 font-medium">⚠️ {{ ambPayloadError }}</p>
           </div>
         </div>
@@ -327,6 +327,26 @@
 
 <script setup lang="ts">
 import { Send, CheckCircle2, AlertCircle } from 'lucide-vue-next'
+
+function syntaxHighlight(json: string) {
+  if (!json) return '';
+  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+    let cls = 'text-amber-600 dark:text-amber-400'; // number
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        cls = 'text-indigo-600 dark:text-indigo-400 font-semibold'; // key
+      } else {
+        cls = 'text-emerald-600 dark:text-emerald-400'; // string
+      }
+    } else if (/true|false/.test(match)) {
+      cls = 'text-rose-600 dark:text-rose-400 font-semibold'; // boolean
+    } else if (/null/.test(match)) {
+      cls = 'text-slate-500 dark:text-slate-400 italic'; // null
+    }
+    return '<span class="' + cls + '">' + match + '</span>';
+  });
+}
 
 const activeTab = ref<'dashboard' | 'ambiance'>('dashboard')
 
