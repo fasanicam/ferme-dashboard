@@ -10,7 +10,7 @@ Dashboard en temps réel pour la surveillance de capteurs IoT via MQTT, dévelop
 
 - 📊 **Visualisation en temps réel** : Mise à jour instantanée via WebSockets (Flask-SocketIO)
 - 📈 **Graphiques interactifs** : Historique des données avec Chart.js
-- 💾 **Persistance des données** : Base de données SQLite pour l'historique
+- 💾 **Persistance des données** : Base de données MariaDB pour l'historique et l'analyse
 - 🔄 **Reconnexion automatique** : Gestion robuste des déconnexions MQTT
 - 📝 **Rotation des logs** : Gestion automatique de la taille des fichiers logs
 - 🎨 **Interface moderne** : Design responsive avec Tailwind CSS
@@ -21,7 +21,7 @@ Dashboard en temps réel pour la surveillance de capteurs IoT via MQTT, dévelop
 ### Prérequis
 
 - Python 3.8+
-- Docker (optionnel, pour MQTT broker)
+- Docker (pour MariaDB et le broker MQTT)
 - Git
 
 ### Installation locale
@@ -37,9 +37,9 @@ Dashboard en temps réel pour la surveillance de capteurs IoT via MQTT, dévelop
    pip install -r requirements.txt
    ```
 
-3. **Configurer MQTT**
+3. **Configurer MQTT & MariaDB**
    
-   Assurez-vous d'avoir un broker MQTT accessible. Par défaut, l'application se connecte à `global_mqtt:1883`.
+   Par défaut, l'application se connecte au broker MQTT `global_mqtt:1883` et à la base MariaDB `db_bzh`.
 
 4. **Lancer l'application**
    ```bash
@@ -73,13 +73,7 @@ bzh/mecatro/dashboard/serre/humidite → 65
 bzh/mecatro/dashboard/pompe/etat → ON
 ```
 
-### Générer des données de test
-
-Pour peupler la base de données avec des données historiques :
-
-```bash
-python populate_db.py
-```
+### Tester l'envoi de messages MQTT
 
 Pour envoyer des messages MQTT de test :
 
@@ -91,28 +85,41 @@ python verify_mqtt.py
 
 ```
 ferme-dashboard/
-├── app.py                 # Application Flask principale
-├── mqtt_client.py         # Client MQTT et gestion des messages
-├── database.py            # Gestion SQLite
-├── templates/
-│   └── dashboard.html     # Interface web
-├── requirements.txt       # Dépendances Python
-├── populate_db.py         # Script de génération de données
-└── verify_mqtt.py         # Script de test MQTT
+├── app.py                         # Application Flask principale
+├── mqtt_client.py                 # Client MQTT et gestion des messages Socket.IO
+├── database.py                    # Gestion MariaDB (pool de connexions, tables, index)
+├── migrate_sqlite_to_mariadb.py   # Script d'initialisation DB / migration
+├── verify_mqtt.py                 # Script de test MQTT
+├── requirements.txt               # Dépendances Python
+├── static/
+│   └── css/style.css              # Styles Tailwind CSS
+└── templates/
+    ├── dashboard.html             # Interface web principale
+    ├── analysis.html              # Vue d'analyse des flux MQTT
+    ├── test.html                  # Interface interactive de test étudiant
+    ├── admin.html                 # Console d'administration
+    ├── login.html                 # Authentification admin
+    └── socketio_test.html         # Page de test WebSockets
 ```
 
 ## 🔌 API Endpoints
 
 - `GET /` - Dashboard principal
-- `GET /api/history/<module>/<variable>` - Historique d'une variable (100 dernières valeurs)
-- `GET /api/stats/messages` - Statistiques des messages (60 dernières minutes)
+- `GET /analysis` - Tableau de bord d'analyse des flux MQTT
+- `GET /test` - Interface interactive de publication/test pour les étudiants
+- `GET /admin` - Administration des modules et variables
+- `GET /api/history/<module>/<variable>` - Historique d'une variable
+- `GET /api/stats/messages` - Statistiques des messages
+- `GET /api/stats/publications` - Tendances de publication par module
+- `GET /api/mqtt/global` - Statistiques globales MQTT
+- `GET /api/mqtt/projects` - Analyse par projet
 
 ## 🛠️ Technologies
 
-- **Backend** : Flask, Flask-SocketIO, Paho-MQTT
+- **Backend** : Flask, Flask-SocketIO, Paho-MQTT, Gevent / Eventlet
 - **Frontend** : HTML5, Tailwind CSS, Chart.js
-- **Base de données** : SQLite
-- **WebSockets** : Socket.IO (eventlet)
+- **Base de données** : MariaDB (pool de connexions persistantes)
+- **WebSockets** : Socket.IO
 - **Logging** : RotatingFileHandler
 
 ## 📝 Configuration
