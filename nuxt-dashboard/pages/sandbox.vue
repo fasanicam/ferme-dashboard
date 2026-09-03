@@ -381,7 +381,7 @@
 
         <div>
           <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Payload (libre — texte, nombre, JSON…)</label>
-          <textarea v-model="priv.payload" rows="3" placeholder="ex: 120 ou ON ou {\"vitesse\": 80}"
+          <textarea v-model="priv.payload" rows="3" :placeholder="'ex: 120 ou ON ou {\'vitesse\': 80}'"
             class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
           />
         </div>

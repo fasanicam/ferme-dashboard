@@ -19,7 +19,8 @@ import { GRANDEURS_NORMALISEES } from '../../utils/types'
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const mode = (body.mode || 'dashboard').trim()
+  // Si customTopic est fourni, on force le mode custom (évite le fallback dashboard)
+  const mode = body.customTopic ? 'custom' : (body.mode || 'dashboard').trim()
 
   // Shared JSON payload builder and validator
   function buildJsonPayload(valeur: any, unite: string, type: string, dateheure?: string): { payload: string; error: string | null } {

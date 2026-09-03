@@ -13,7 +13,7 @@
     <footer class="mt-auto border-t border-slate-200/80 dark:border-slate-800/80 py-6 text-center text-xs text-slate-400">
       <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
         <span>🌱 <strong>Ferme Connectée</strong> — Dashboard IoT & Supervision MQTT</span>
-        <span>Développé avec <strong>Nuxt 3</strong> & <strong>Tailwind CSS</strong></span>
+        <span>Développé par <strong>David Fasani</strong></span>
       </div>
     </footer>
   </div>

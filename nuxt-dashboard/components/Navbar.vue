@@ -29,6 +29,15 @@
           </NuxtLink>
 
           <NuxtLink
+            to="/ambiance"
+            class="px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5"
+            :class="route.path === '/ambiance' ? 'bg-white dark:bg-slate-800 text-eco-600 dark:text-eco-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
+          >
+            <Thermometer :size="16" />
+            <span>Ambiance</span>
+          </NuxtLink>
+
+          <NuxtLink
             to="/analysis"
             class="px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5"
             :class="route.path === '/analysis' ? 'bg-white dark:bg-slate-800 text-eco-600 dark:text-eco-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
@@ -100,6 +109,10 @@
         <Activity :size="18" />
         <span>Dashboard</span>
       </NuxtLink>
+      <NuxtLink to="/ambiance" class="flex flex-col items-center py-1 px-3 rounded-lg" :class="route.path === '/ambiance' ? 'text-eco-500 font-bold' : 'text-slate-500'">
+        <Thermometer :size="18" />
+        <span>Ambiance</span>
+      </NuxtLink>
       <NuxtLink to="/analysis" class="flex flex-col items-center py-1 px-3 rounded-lg" :class="route.path === '/analysis' ? 'text-eco-500 font-bold' : 'text-slate-500'">
         <BarChart3 :size="18" />
         <span>Analyse</span>
@@ -119,7 +132,8 @@ import {
   Terminal,
   Sun,
   Moon,
-  Timer
+  Timer,
+  Thermometer
 } from 'lucide-vue-next'
 import { useDashboardStore } from '../stores/dashboard'
 import { useTheme } from '../composables/useTheme'
